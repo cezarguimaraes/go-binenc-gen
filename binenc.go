@@ -8,7 +8,6 @@ import (
 	"go/format"
 	"go/token"
 	"go/types"
-	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -154,41 +153,11 @@ func (g *Generator) format() []byte {
 	return src
 }
 
-func writeByte(w io.Writer, offset int, name string, incrOffset bool) {
-	index := "offset"
-	if offset > 0 {
-		index += fmt.Sprintf("+%d", offset)
-	}
-	fmt.Fprintf(w, "\tbuf[%s] = byte(%s)\n", index, name)
-	if incrOffset {
-		fmt.Fprintf(w, "\toffset += 1\n")
-	}
-}
-
 func abs(x int) int {
 	if x < 0 {
 		return -x
 	}
 	return x
-}
-
-func writeNumberN(w io.Writer, name string, nbytes int, unsigned bool, size *int, bigEndian bool) {
-	if !unsigned {
-		name = fmt.Sprintf("uint%d(%s)", 8*nbytes, name)
-	}
-	start, end, incr := 0, nbytes, 1
-	if bigEndian {
-		start, end, incr = nbytes-1, -1, -1
-	}
-	for i := start; i != end; i += incr {
-		if i == 0 {
-			writeByte(w, 0, name, false)
-		} else {
-			writeByte(w, abs(i-start), fmt.Sprintf("%s >> %d", name, i*8), false)
-		}
-	}
-	*size += nbytes
-	fmt.Fprintf(w, "\toffset += %d\n", nbytes)
 }
 
 func (g *Generator) generateWrite(s *Struct) {
