@@ -53,10 +53,14 @@ func rshift(name string, n int) string {
 type Writer struct {
 	buf *bytes.Buffer
 
-	stdSizes     *types.StdSizes
-	dynamicSizes []string
-	size         int
-	bigEndian    bool
+	stdSizes *types.StdSizes
+
+	sizeExprs    []string
+	dynamicSizes [][]string
+	sizes        []int
+	forLvl       int
+
+	bigEndian bool
 }
 
 func NewWriter() *Writer {
@@ -66,7 +70,9 @@ func NewWriter() *Writer {
 			WordSize: 4,
 			MaxAlign: 4,
 		},
+		forLvl: -1,
 	}
+	enc.pushForLvl()
 	return enc
 }
 
@@ -76,12 +82,12 @@ func (w *Writer) Printf(format string, args ...interface{}) {
 
 func (w *Writer) addOffset(size int) {
 	w.Printf(incrOffsetFmt, size)
-	w.size += size
+	w.sizes[w.forLvl] += size
 }
 
 func (w *Writer) addDynamicOffset(name string) {
 	w.Printf(dynOffsetFmt, name)
-	w.dynamicSizes = append(w.dynamicSizes, name)
+	w.dynamicSizes[w.forLvl] = append(w.dynamicSizes[w.forLvl], name)
 }
 
 func (w *Writer) writeByte(offset int, name string, incrOffset bool) {
@@ -113,18 +119,64 @@ func (w *Writer) writeBoolean(name string) {
 	w.Printf(booleanFmt, name, staticIndex, "0x01", staticIndex, "0x00")
 }
 
+func (w *Writer) pushForLvl() {
+	w.sizes = append(w.sizes, 0)
+	w.dynamicSizes = append(w.dynamicSizes, []string{})
+	w.forLvl += 1
+	if w.forLvl > 0 {
+		w.sizeExprs = append(w.sizeExprs, "}\n")
+	}
+}
+
+func (w *Writer) popForLvl(name string) {
+	/*
+		for _, rangeForVar := name {
+			size += sizes[forLvl]
+			size += dynSize[forLvl][0] + ...
+		}
+	*/
+	// exprs are inserted in reverse order
+	if len(w.dynamicSizes[w.forLvl]) > 0 {
+		w.sizeExprs = append(w.sizeExprs,
+			fmt.Sprintf(
+				"\tsize += %s\n",
+				strings.Join(w.dynamicSizes[w.forLvl], " + "),
+			),
+		)
+	}
+	w.dynamicSizes = w.dynamicSizes[:w.forLvl]
+	sizeOp := "+="
+	if w.forLvl == 0 {
+		sizeOp = ":="
+	}
+	w.sizeExprs = append(w.sizeExprs,
+		fmt.Sprintf(
+			"\tsize %s %d\n",
+			sizeOp,
+			w.sizes[w.forLvl],
+		),
+	)
+	w.sizes = w.sizes[:w.forLvl]
+	if w.forLvl > 0 {
+		w.sizeExprs = append(w.sizeExprs,
+			fmt.Sprintf(forStartFmt, rangeForVar(w.forLvl), name),
+		)
+	}
+	w.forLvl -= 1
+}
+
 func (w *Writer) WriteField(name string, t types.Type) {
-	w.writeField(name, t, 0)
+	w.writeField(name, t)
 }
 
 func rangeForVar(lvl int) string {
-	if lvl == 0 {
+	if lvl == 1 {
 		return "v"
 	}
-	return fmt.Sprintf("v%d", lvl)
+	return fmt.Sprintf("v%d", lvl-1)
 }
 
-func (w *Writer) writeField(name string, t types.Type, forLvl int) {
+func (w *Writer) writeField(name string, t types.Type) {
 	t = t.Underlying()
 	if ptr, ok := t.(*types.Pointer); ok {
 		w.WriteField("*"+name, ptr.Elem())
@@ -134,10 +186,12 @@ func (w *Writer) writeField(name string, t types.Type, forLvl int) {
 		// TODO: specially handle []byte
 		slcLen := length(name)
 		w.writeNumberN(slcLen, 2, true)
-		w.Printf(forStartFmt, rangeForVar(forLvl), name)
-		nxtForLvl := forLvl + 1
-		w.writeField(rangeForVar(forLvl), slc.Elem(), nxtForLvl)
+		w.pushForLvl()
+		w.Printf(forStartFmt, rangeForVar(w.forLvl), name)
+		w.writeField(rangeForVar(w.forLvl), slc.Elem())
+		w.popForLvl(name)
 		w.Printf("\t}\n")
+		return
 	}
 	// TODO: handle structs
 	switch f := t.(type) {
@@ -160,11 +214,14 @@ func (w *Writer) writeField(name string, t types.Type, forLvl int) {
 }
 
 func (w *Writer) SizeExpr() string {
-	expr := fmt.Sprintf("%d", w.size)
-	if len(w.dynamicSizes) > 0 {
-		expr += "+" + strings.Join(w.dynamicSizes, "+")
+	if w.forLvl == 0 {
+		w.popForLvl("ignored")
 	}
-	return expr
+	res := make([]string, len(w.sizeExprs))
+	for i := 0; i < len(w.sizeExprs); i++ {
+		res[i] = w.sizeExprs[len(w.sizeExprs)-i-1]
+	}
+	return strings.Join(res, "")
 }
 
 func (w *Writer) Bytes() []byte {

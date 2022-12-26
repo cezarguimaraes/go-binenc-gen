@@ -12,7 +12,11 @@ import (
 func parseOutput(t *testing.T, e *encoder.Writer) []string {
 	t.Helper()
 	raw := string(e.Bytes())
-	lines := strings.Split(raw, "\n")
+	return splitLinesTrim(t, raw)
+}
+
+func splitLinesTrim(t *testing.T, s string) []string {
+	lines := strings.Split(s, "\n")
 	for i := 0; i < len(lines); i++ {
 		lines[i] = strings.TrimSpace(lines[i])
 	}
@@ -276,9 +280,10 @@ func TestWriteField_IntegerTypes(t *testing.T) {
 
 func TestWriteField_Array(t *testing.T) {
 	cases := []struct {
-		name string
-		want []string
-		t    types.Type
+		name         string
+		want         []string
+		wantSizeExpr []string
+		t            types.Type
 	}{
 		{
 			name: "[]int16",
@@ -290,6 +295,13 @@ func TestWriteField_Array(t *testing.T) {
 				"buf[offset] = byte(uint16(v))",
 				"buf[offset + 1] = byte(uint16(v) >> 8)",
 				"offset += 2",
+				"}",
+				"",
+			},
+			wantSizeExpr: []string{
+				"size := 2",
+				"for _, v := range test {",
+				"size += 2",
 				"}",
 				"",
 			},
@@ -313,7 +325,42 @@ func TestWriteField_Array(t *testing.T) {
 				"}",
 				"",
 			},
+			wantSizeExpr: []string{
+				"size := 2",
+				"for _, v := range test {",
+				"size += 2",
+				"for _, v1 := range v {",
+				"size += 2",
+				"}",
+				"}",
+				"",
+			},
 			t: types.NewSlice(types.NewSlice(types.Typ[types.Int16])),
+		},
+		{
+			name: "[]string",
+			want: []string{
+				"buf[offset] = byte(len(test))",
+				"buf[offset + 1] = byte(len(test) >> 8)",
+				"offset += 2",
+				"for _, v := range test {",
+				"buf[offset] = byte(len(v))",
+				"buf[offset + 1] = byte(len(v) >> 8)",
+				"offset += 2",
+				"copy(buf[offset:], v)",
+				"offset += len(v)",
+				"}",
+				"",
+			},
+			wantSizeExpr: []string{
+				"size := 2",
+				"for _, v := range test {",
+				"size += 2",
+				"size += len(v)",
+				"}",
+				"",
+			},
+			t: types.NewSlice(types.Typ[types.String]),
 		},
 	}
 
@@ -324,6 +371,10 @@ func TestWriteField_Array(t *testing.T) {
 			lines := parseOutput(t, e)
 			if diff := cmp.Diff(c.want, lines); diff != "" {
 				t.Errorf("e.WriteField(%q, %q): (-want, +got):\n%s", "test", c.t.String(), diff)
+			}
+			sizeLines := splitLinesTrim(t, e.SizeExpr())
+			if diff := cmp.Diff(c.wantSizeExpr, sizeLines); diff != "" {
+				t.Errorf("e.SizeExpr(): (-want, +got):\n%s", diff)
 			}
 		})
 	}

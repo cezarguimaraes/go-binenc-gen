@@ -8,7 +8,6 @@ import (
 	"go/format"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -48,7 +47,6 @@ func main() {
 	g.Printf("\n")
 
 	g.Printf("import (\n")
-	g.Printf("\t\"encoding/binary\"\n")
 	g.Printf("\t\"io\"\n")
 	g.Printf(")")
 	g.Printf("\n")
@@ -58,7 +56,7 @@ func main() {
 	src := g.format()
 	baseName := fmt.Sprintf("%s_encoding.go", g.pkg.name)
 	outputName := filepath.Join(dir, strings.ToLower(baseName))
-	err := ioutil.WriteFile(outputName, src, 0644)
+	err := os.WriteFile(outputName, src, 0644)
 	if err != nil {
 		log.Fatalf("writing output: %s", err)
 	}
@@ -80,9 +78,9 @@ type Struct struct {
 }
 
 type File struct {
-	pkg      *Package
-	file     *ast.File
-	typeName string
+	pkg  *Package
+	file *ast.File
+	// typeName string
 	// values   []Value
 	structs []*Struct
 }
@@ -142,7 +140,8 @@ func (g *Generator) generate() {
 	for _, file := range g.pkg.files {
 		for _, s := range file.structs {
 			g.generateWrite(s)
-			g.generateRead(s)
+			// TODO: generateRead
+			// g.generateRead(s)
 		}
 	}
 }
@@ -161,15 +160,8 @@ func (g *Generator) format() []byte {
 	return src
 }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
 func (g *Generator) generateWrite(s *Struct) {
-	g.Printf("func (s *%s) Write(w io.Writer) (n int64, err error) {\n", s.name)
+	g.Printf("func (s *%s) Write(w io.Writer) (n int, err error) {\n", s.name)
 	e := encoder.NewWriter()
 	e.Printf("\toffset := 0\n")
 	for i, name := range s.fields {
@@ -180,10 +172,13 @@ func (g *Generator) generateWrite(s *Struct) {
 	}
 	e.Printf("\treturn w.Write(buf)\n")
 	e.Printf("}\n\n")
-	g.Printf("\tbuf := make([]byte, %s)\n", e.SizeExpr())
+	g.Printf(e.SizeExpr())
+	g.Printf("\tbuf := make([]byte, size)\n")
 	e.WriteTo(&g.buf)
 }
 
+// TODO:
+/*
 func (g *Generator) generateRead(s *Struct) {
 	g.Printf("func (s *%s) Read(r io.Reader) error {\n", s.name)
 	for _, name := range s.fields {
@@ -192,6 +187,7 @@ func (g *Generator) generateRead(s *Struct) {
 	g.Printf("\treturn nil\n")
 	g.Printf("}\n\n")
 }
+*/
 
 func (f *File) inspectNode(node ast.Node) bool {
 	decl, ok := node.(*ast.GenDecl)
