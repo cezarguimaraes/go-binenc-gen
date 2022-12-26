@@ -11,26 +11,14 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/cezarguimaraes/go-binenc-gen/encoder"
 	"golang.org/x/tools/go/packages"
 )
 
 func main() {
-	mInt8 := int8(12)
-	mInt16 := int16(255 | (4 << 8))
-	sce := &SChannelEvent{
-		OPCode:       0x68,
-		ChannelId:    0x01,
-		PlayerName:   "cezar",
-		ChannelEvent: 0x00,
-		TestPointer:  &mInt8,
-		TestPInt16:   &mInt16,
-	}
-	var ignore bytes.Buffer
-	sce.Write(&ignore)
-	// 68 01 00 05 00 63 65 7a 61 72 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0c ff 04
-
 	log.SetFlags(0)
 	log.SetPrefix("binenc: ")
 
@@ -38,7 +26,17 @@ func main() {
 	tags := []string{}
 	args := flag.Args()
 	if len(args) == 0 {
-		args = []string{"test.go"}
+		args = []string{"."}
+	}
+
+	var dir string
+	if len(args) == 1 && isDirectory(args[0]) {
+		dir = args[0]
+	} else {
+		if len(tags) != 0 {
+			log.Fatal("-tags option applies only to directories, not when files are specified")
+		}
+		dir = filepath.Dir(args[0])
 	}
 
 	g := &Generator{}
@@ -52,17 +50,27 @@ func main() {
 	g.Printf("import (\n")
 	g.Printf("\t\"encoding/binary\"\n")
 	g.Printf("\t\"io\"\n")
-	g.Printf("\t\"fmt\"\n")
 	g.Printf(")")
 	g.Printf("\n")
 
 	g.generate()
 
 	src := g.format()
-	err := ioutil.WriteFile(fmt.Sprintf("%s_encoding.go", g.pkg.name), src, 0644)
+	baseName := fmt.Sprintf("%s_encoding.go", g.pkg.name)
+	outputName := filepath.Join(dir, strings.ToLower(baseName))
+	err := ioutil.WriteFile(outputName, src, 0644)
 	if err != nil {
 		log.Fatalf("writing output: %s", err)
 	}
+}
+
+// isDirectory reports whether the named file is a directory.
+func isDirectory(name string) bool {
+	info, err := os.Stat(name)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return info.IsDir()
 }
 
 type Struct struct {
@@ -101,7 +109,7 @@ func (g *Generator) parsePackage(patterns, tags []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if len(patterns) != 1 {
+	if len(pkgs) != 1 {
 		log.Fatalf("error: %d packages found", len(pkgs))
 	}
 
@@ -161,72 +169,19 @@ func abs(x int) int {
 }
 
 func (g *Generator) generateWrite(s *Struct) {
-	g.Printf("func (s *%s) Write(w io.Writer) error {\n", s.name)
-	// TODO: initialize buffer with required capacity
-	//g.Printf("\tbuf := make([]byte, 256)\n")
-	g.Printf("\toffset := 0\n")
-	var buf bytes.Buffer
-	staticSize := 0
-	dynamicSizes := []string{}
-	bigEndian := false
+	g.Printf("func (s *%s) Write(w io.Writer) (n int64, err error) {\n", s.name)
+	e := encoder.NewWriter()
+	e.Printf("\toffset := 0\n")
 	for i, name := range s.fields {
 		selector := fmt.Sprintf("s.%s", name)
-		fmt.Fprintf(&buf, "\t// %s\n", name)
+		e.Printf("\t// %s\n", name)
 		t := s.types[i]
-		if ptr, ok := t.(*types.Pointer); ok {
-			selector = "*" + selector
-			t = ptr.Elem()
-		}
-		switch t {
-		case types.Typ[types.Bool]:
-		case types.Typ[types.Uint8]:
-			writeNumberN(&buf, selector, 1, true, &staticSize, bigEndian)
-			break
-		case types.Typ[types.Int8]:
-			writeNumberN(&buf, selector, 1, false, &staticSize, bigEndian)
-			break
-		case types.Typ[types.Uint16]:
-			writeNumberN(&buf, selector, 2, true, &staticSize, bigEndian)
-			break
-		case types.Typ[types.Int16]:
-			writeNumberN(&buf, selector, 2, false, &staticSize, bigEndian)
-			break
-		case types.Typ[types.Uint32]:
-			writeNumberN(&buf, selector, 4, true, &staticSize, bigEndian)
-			break
-		case types.Typ[types.Int32]:
-			writeNumberN(&buf, selector, 4, false, &staticSize, bigEndian)
-			break
-		case types.Typ[types.Uint64]:
-			writeNumberN(&buf, selector, 8, true, &staticSize, bigEndian)
-			break
-		case types.Typ[types.Int64]:
-			writeNumberN(&buf, selector, 8, false, &staticSize, bigEndian)
-			break
-		case types.Typ[types.String]:
-			dynSize := fmt.Sprintf("len(%s)", selector)
-			writeNumberN(&buf, dynSize, 2, true, &staticSize, bigEndian)
-			fmt.Fprintf(&buf, "\tcopy(buf[offset:], %s)\n", selector)
-			fmt.Fprintf(&buf, "\toffset += %s\n", dynSize)
-			dynamicSizes = append(dynamicSizes, dynSize)
-			break
-		default:
-			//g.Printf("\tbinary.Write(&buf, binary.LittleEndian, s.%s)\n", name)
-			fmt.Fprintf(&buf, "\t// unsupported type\n")
-			log.Printf("warning: type not supported %T\n", t)
-		}
+		e.WriteField(selector, t)
 	}
-	fmt.Fprintf(&buf, "\tfmt.Printf(\"%% x\\n\", buf)\n")
-	fmt.Fprintf(&buf, "\t_, err := w.Write(buf)\n")
-	fmt.Fprintf(&buf, "\treturn err\n")
-	fmt.Fprintf(&buf, "}\n\n")
-
-	dynSizeExpr := ""
-	if len(dynamicSizes) > 0 {
-		dynSizeExpr = "+" + strings.Join(dynamicSizes, "+")
-	}
-	g.Printf("\tbuf := make([]byte, %d%s)\n", staticSize, dynSizeExpr)
-	buf.WriteTo(&g.buf)
+	e.Printf("\treturn w.Write(buf)\n")
+	e.Printf("}\n\n")
+	g.Printf("\tbuf := make([]byte, %s)\n", e.SizeExpr())
+	e.WriteTo(&g.buf)
 }
 
 func (g *Generator) generateRead(s *Struct) {

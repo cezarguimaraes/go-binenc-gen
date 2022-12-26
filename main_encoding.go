@@ -4,88 +4,109 @@ package main
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 )
 
-func (s *SChannelEvent) Write(w io.Writer) error {
+func (s *Struct) Write(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 8+len(s.name)+len(v))
 	offset := 0
-	buf := make([]byte, 35+len(s.PlayerName))
-	// OPCode
-	buf[offset] = byte(s.OPCode)
-	offset += 1
-	// ChannelId
-	buf[offset] = byte(s.ChannelId)
-	buf[offset+1] = byte(s.ChannelId >> 8)
+	// name
+	buf[offset] = byte(len(s.name))
+	buf[offset+1] = byte(len(s.name) >> 8)
 	offset += 2
-	// PlayerName
-	buf[offset] = byte(len(s.PlayerName))
-	buf[offset+1] = byte(len(s.PlayerName) >> 8)
+	copy(buf[offset:], s.name)
+	offset += len(s.name)
+	// fields
+	buf[offset] = byte(len(s.fields))
+	buf[offset+1] = byte(len(s.fields) >> 8)
 	offset += 2
-	copy(buf[offset:], s.PlayerName)
-	offset += len(s.PlayerName)
-	// ChannelEvent
-	buf[offset] = byte(s.ChannelEvent)
-	offset += 1
-	// TestInt16
-	buf[offset] = byte(uint16(s.TestInt16))
-	buf[offset+1] = byte(uint16(s.TestInt16) >> 8)
+	for _, v := range s.fields {
+		buf[offset] = byte(len(v))
+		buf[offset+1] = byte(len(v) >> 8)
+		offset += 2
+		copy(buf[offset:], v)
+		offset += len(v)
+	}
+	// types
+	buf[offset] = byte(len(s.types))
+	buf[offset+1] = byte(len(s.types) >> 8)
 	offset += 2
-	// TestUint32
-	buf[offset] = byte(s.TestUint32)
-	buf[offset+1] = byte(s.TestUint32 >> 8)
-	buf[offset+2] = byte(s.TestUint32 >> 16)
-	buf[offset+3] = byte(s.TestUint32 >> 24)
-	offset += 4
-	// TestInt32
-	buf[offset] = byte(uint32(s.TestInt32))
-	buf[offset+1] = byte(uint32(s.TestInt32) >> 8)
-	buf[offset+2] = byte(uint32(s.TestInt32) >> 16)
-	buf[offset+3] = byte(uint32(s.TestInt32) >> 24)
-	offset += 4
-	// TestUint64
-	buf[offset] = byte(s.TestUint64)
-	buf[offset+1] = byte(s.TestUint64 >> 8)
-	buf[offset+2] = byte(s.TestUint64 >> 16)
-	buf[offset+3] = byte(s.TestUint64 >> 24)
-	buf[offset+4] = byte(s.TestUint64 >> 32)
-	buf[offset+5] = byte(s.TestUint64 >> 40)
-	buf[offset+6] = byte(s.TestUint64 >> 48)
-	buf[offset+7] = byte(s.TestUint64 >> 56)
-	offset += 8
-	// TestInt64
-	buf[offset] = byte(uint64(s.TestInt64))
-	buf[offset+1] = byte(uint64(s.TestInt64) >> 8)
-	buf[offset+2] = byte(uint64(s.TestInt64) >> 16)
-	buf[offset+3] = byte(uint64(s.TestInt64) >> 24)
-	buf[offset+4] = byte(uint64(s.TestInt64) >> 32)
-	buf[offset+5] = byte(uint64(s.TestInt64) >> 40)
-	buf[offset+6] = byte(uint64(s.TestInt64) >> 48)
-	buf[offset+7] = byte(uint64(s.TestInt64) >> 56)
-	offset += 8
-	// TestPointer
-	buf[offset] = byte(uint8(*s.TestPointer))
-	offset += 1
-	// TestPInt16
-	buf[offset] = byte(uint16(*s.TestPInt16))
-	buf[offset+1] = byte(uint16(*s.TestPInt16) >> 8)
-	offset += 2
-	fmt.Printf("% x\n", buf)
-	_, err := w.Write(buf)
-	return err
+	for _, v := range s.types {
+	}
+	return w.Write(buf)
 }
 
-func (s *SChannelEvent) Read(r io.Reader) error {
-	binary.Read(r, binary.LittleEndian, s.OPCode)
-	binary.Read(r, binary.LittleEndian, s.ChannelId)
-	binary.Read(r, binary.LittleEndian, s.PlayerName)
-	binary.Read(r, binary.LittleEndian, s.ChannelEvent)
-	binary.Read(r, binary.LittleEndian, s.TestInt16)
-	binary.Read(r, binary.LittleEndian, s.TestUint32)
-	binary.Read(r, binary.LittleEndian, s.TestInt32)
-	binary.Read(r, binary.LittleEndian, s.TestUint64)
-	binary.Read(r, binary.LittleEndian, s.TestInt64)
-	binary.Read(r, binary.LittleEndian, s.TestPointer)
-	binary.Read(r, binary.LittleEndian, s.TestPInt16)
+func (s *Struct) Read(r io.Reader) error {
+	binary.Read(r, binary.LittleEndian, s.name)
+	binary.Read(r, binary.LittleEndian, s.fields)
+	binary.Read(r, binary.LittleEndian, s.types)
+	return nil
+}
+
+func (s *File) Write(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 4+len(s.typeName))
+	offset := 0
+	// pkg
+	// file
+	// typeName
+	buf[offset] = byte(len(s.typeName))
+	buf[offset+1] = byte(len(s.typeName) >> 8)
+	offset += 2
+	copy(buf[offset:], s.typeName)
+	offset += len(s.typeName)
+	// structs
+	buf[offset] = byte(len(s.structs))
+	buf[offset+1] = byte(len(s.structs) >> 8)
+	offset += 2
+	for _, v := range s.structs {
+	}
+	return w.Write(buf)
+}
+
+func (s *File) Read(r io.Reader) error {
+	binary.Read(r, binary.LittleEndian, s.pkg)
+	binary.Read(r, binary.LittleEndian, s.file)
+	binary.Read(r, binary.LittleEndian, s.typeName)
+	binary.Read(r, binary.LittleEndian, s.structs)
+	return nil
+}
+
+func (s *Package) Write(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 4+len(s.name))
+	offset := 0
+	// name
+	buf[offset] = byte(len(s.name))
+	buf[offset+1] = byte(len(s.name) >> 8)
+	offset += 2
+	copy(buf[offset:], s.name)
+	offset += len(s.name)
+	// typeInfo
+	// files
+	buf[offset] = byte(len(s.files))
+	buf[offset+1] = byte(len(s.files) >> 8)
+	offset += 2
+	for _, v := range s.files {
+	}
+	return w.Write(buf)
+}
+
+func (s *Package) Read(r io.Reader) error {
+	binary.Read(r, binary.LittleEndian, s.name)
+	binary.Read(r, binary.LittleEndian, s.typeInfo)
+	binary.Read(r, binary.LittleEndian, s.files)
+	return nil
+}
+
+func (s *Generator) Write(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 0)
+	offset := 0
+	// buf
+	// pkg
+	return w.Write(buf)
+}
+
+func (s *Generator) Read(r io.Reader) error {
+	binary.Read(r, binary.LittleEndian, s.buf)
+	binary.Read(r, binary.LittleEndian, s.pkg)
 	return nil
 }
