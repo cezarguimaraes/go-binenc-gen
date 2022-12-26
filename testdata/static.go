@@ -1,8 +1,6 @@
 package static
 
-// TODO: filter by pkg name
-//
-//go:generate go-binenc-gen
+//go:generate go-binenc-gen static.go
 type Static struct {
 	Uint8  uint8
 	Uint16 uint16
