@@ -3,8 +3,10 @@ package main_test
 import (
 	"bytes"
 	"encoding/gob"
+	"io"
 	"math/rand"
 	"testing"
+	"unsafe"
 )
 
 type Person struct {
@@ -52,6 +54,59 @@ func randomString(l int) string {
 func randInt(min int, max int) int {
 	// using unseeded math/rand for deterministic generation
 	return min + rand.Intn(max-min)
+}
+
+func BenchmarkReadSmallPtr(b *testing.B) {
+	b.SetBytes(58)
+	ser := s.Bytes()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r := io.Reader(bytes.NewBuffer(ser))
+		out := &Person{}
+		size := 0
+		intBuf := make([]byte, 8)
+		// Name
+		r.Read(intBuf[:2])
+		size = int(intBuf[0]) + (int(intBuf[1]) << 8)
+		nameBuf := make([]byte, size)
+		r.Read(nameBuf[:size])
+		out.Name = *(*string)(unsafe.Pointer(&nameBuf))
+		// Kids
+		r.Read(intBuf[:2])
+		size = int(intBuf[0]) + (int(intBuf[1]) << 8)
+		out.Kids = make([]string, size)
+		iEnd := size
+		for i := 0; i < iEnd; i++ {
+			r.Read(intBuf[:2])
+			size = int(intBuf[0]) + (int(intBuf[1]) << 8)
+			iBuf := make([]byte, size)
+			r.Read(iBuf[:size])
+			out.Kids[i] = *(*string)(unsafe.Pointer(&iBuf))
+		}
+		// Touches
+		r.Read(intBuf[:4])
+		out.Touches = int(intBuf[0]) + (int(intBuf[1]) << 8) + (int(intBuf[2]) << 16) + (int(intBuf[3]) << 24)
+
+		// MinT
+		r.Read(intBuf[:8])
+		out.MinT = int64(intBuf[0]) + (int64(intBuf[1]) << 8) + (int64(intBuf[2]) << 16) + (int64(intBuf[3]) << 24) + (int64(intBuf[4]) << 32) + (int64(intBuf[5]) << 40) + (int64(intBuf[6]) << 48) + (int64(intBuf[7]) << 56)
+
+		// MaxT
+		r.Read(intBuf[:8])
+		out.MaxT = int64(intBuf[0]) + (int64(intBuf[1]) << 8) + (int64(intBuf[2]) << 16) + (int64(intBuf[3]) << 24) + (int64(intBuf[4]) << 32) + (int64(intBuf[5]) << 40) + (int64(intBuf[6]) << 48) + (int64(intBuf[7]) << 56)
+
+		// MeanT
+		r.Read(intBuf[:8])
+		out.MeanT = int64(intBuf[0]) + (int64(intBuf[1]) << 8) + (int64(intBuf[2]) << 16) + (int64(intBuf[3]) << 24) + (int64(intBuf[4]) << 32) + (int64(intBuf[5]) << 40) + (int64(intBuf[6]) << 48) + (int64(intBuf[7]) << 56)
+
+		/*
+			// sanity check
+			if diff := cmp.Diff(s, out); diff != "" {
+				b.Error(diff)
+			}
+		*/
+	}
+
 }
 
 const initialSize = 64
@@ -119,77 +174,79 @@ func BenchmarkSmallManualAppend(b *testing.B) {
 	}
 }
 
+func (s *Person) Bytes() []byte {
+	size := 32 + len(s.Name)
+	for _, v := range s.Kids {
+		size += len(v) + 2
+	}
+	buf := make([]byte, size)
+	offset := 0
+	// Name
+	buf[offset] = byte(len(s.Name))
+	buf[offset+1] = byte(len(s.Name) >> 8)
+	offset += 2
+	copy(buf[offset:], s.Name)
+	offset += len(s.Name)
+	// Kids
+	buf[offset] = byte(len(s.Kids))
+	buf[offset+1] = byte(len(s.Kids) >> 8)
+	offset += 2
+	for _, v := range s.Kids {
+		buf[offset] = byte(len(v))
+		buf[offset+1] = byte(len(v) >> 8)
+		offset += 2
+		copy(buf[offset:], v)
+		offset += len(v)
+	}
+	// Touches
+	buf[offset] = byte(uint32(s.Touches))
+	buf[offset+1] = byte(uint32(s.Touches) >> 8)
+	buf[offset+2] = byte(uint32(s.Touches) >> 16)
+	buf[offset+3] = byte(uint32(s.Touches) >> 24)
+	offset += 4
+	// MinT
+	buf[offset] = byte(uint64(s.MinT))
+	buf[offset+1] = byte(uint64(s.MinT) >> 8)
+	buf[offset+2] = byte(uint64(s.MinT) >> 16)
+	buf[offset+3] = byte(uint64(s.MinT) >> 24)
+	buf[offset+4] = byte(uint64(s.MinT) >> 32)
+	buf[offset+5] = byte(uint64(s.MinT) >> 40)
+	buf[offset+6] = byte(uint64(s.MinT) >> 48)
+	buf[offset+7] = byte(uint64(s.MinT) >> 56)
+	offset += 8
+	// MaxT
+	buf[offset] = byte(uint64(s.MaxT))
+	buf[offset+1] = byte(uint64(s.MaxT) >> 8)
+	buf[offset+2] = byte(uint64(s.MaxT) >> 16)
+	buf[offset+3] = byte(uint64(s.MaxT) >> 24)
+	buf[offset+4] = byte(uint64(s.MaxT) >> 32)
+	buf[offset+5] = byte(uint64(s.MaxT) >> 40)
+	buf[offset+6] = byte(uint64(s.MaxT) >> 48)
+	buf[offset+7] = byte(uint64(s.MaxT) >> 56)
+	offset += 8
+	// MeanT
+	buf[offset] = byte(uint64(s.MeanT))
+	buf[offset+1] = byte(uint64(s.MeanT) >> 8)
+	buf[offset+2] = byte(uint64(s.MeanT) >> 16)
+	buf[offset+3] = byte(uint64(s.MeanT) >> 24)
+	buf[offset+4] = byte(uint64(s.MeanT) >> 32)
+	buf[offset+5] = byte(uint64(s.MeanT) >> 40)
+	buf[offset+6] = byte(uint64(s.MeanT) >> 48)
+	buf[offset+7] = byte(uint64(s.MeanT) >> 56)
+	offset += 8
+	return buf
+}
+
 func BenchmarkSmallManualPreAlloc(b *testing.B) {
 	b.SetBytes(58)
 	for i := 0; i < b.N; i++ {
-		out := &bytes.Buffer{}
-		size := 32 + len(s.Name)
-		for _, v := range s.Kids {
-			size += len(v) + 2
-		}
-		buf := make([]byte, size)
-		offset := 0
-		// Name
-		buf[offset] = byte(len(s.Name))
-		buf[offset+1] = byte(len(s.Name) >> 8)
-		offset += 2
-		copy(buf[offset:], s.Name)
-		offset += len(s.Name)
-		// Kids
-		buf[offset] = byte(len(s.Kids))
-		buf[offset+1] = byte(len(s.Kids) >> 8)
-		offset += 2
-		for _, v := range s.Kids {
-			buf[offset] = byte(len(v))
-			buf[offset+1] = byte(len(v) >> 8)
-			offset += 2
-			copy(buf[offset:], v)
-			offset += len(v)
-		}
-		// Touches
-		buf[offset] = byte(uint32(s.Touches))
-		buf[offset+1] = byte(uint32(s.Touches) >> 8)
-		buf[offset+2] = byte(uint32(s.Touches) >> 16)
-		buf[offset+3] = byte(uint32(s.Touches) >> 24)
-		offset += 4
-		// MinT
-		buf[offset] = byte(uint64(s.MinT))
-		buf[offset+1] = byte(uint64(s.MinT) >> 8)
-		buf[offset+2] = byte(uint64(s.MinT) >> 16)
-		buf[offset+3] = byte(uint64(s.MinT) >> 24)
-		buf[offset+4] = byte(uint64(s.MinT) >> 32)
-		buf[offset+5] = byte(uint64(s.MinT) >> 40)
-		buf[offset+6] = byte(uint64(s.MinT) >> 48)
-		buf[offset+7] = byte(uint64(s.MinT) >> 56)
-		offset += 8
-		// MaxT
-		buf[offset] = byte(uint64(s.MaxT))
-		buf[offset+1] = byte(uint64(s.MaxT) >> 8)
-		buf[offset+2] = byte(uint64(s.MaxT) >> 16)
-		buf[offset+3] = byte(uint64(s.MaxT) >> 24)
-		buf[offset+4] = byte(uint64(s.MaxT) >> 32)
-		buf[offset+5] = byte(uint64(s.MaxT) >> 40)
-		buf[offset+6] = byte(uint64(s.MaxT) >> 48)
-		buf[offset+7] = byte(uint64(s.MaxT) >> 56)
-		offset += 8
-		// MeanT
-		buf[offset] = byte(uint64(s.MeanT))
-		buf[offset+1] = byte(uint64(s.MeanT) >> 8)
-		buf[offset+2] = byte(uint64(s.MeanT) >> 16)
-		buf[offset+3] = byte(uint64(s.MeanT) >> 24)
-		buf[offset+4] = byte(uint64(s.MeanT) >> 32)
-		buf[offset+5] = byte(uint64(s.MeanT) >> 40)
-		buf[offset+6] = byte(uint64(s.MeanT) >> 48)
-		buf[offset+7] = byte(uint64(s.MeanT) >> 56)
-		offset += 8
-		out.Write(buf)
+		s.Bytes()
 	}
 }
 
 func BenchmarkBigManualAppend(b *testing.B) {
 	b.SetBytes(53283)
 	for i := 0; i < b.N; i++ {
-		out := &bytes.Buffer{}
 		buf := make([]byte, 0, initialSize)
 		// Name
 		buf = append(buf,
@@ -244,15 +301,12 @@ func BenchmarkBigManualAppend(b *testing.B) {
 			byte(uint64(big.MeanT)>>40),
 			byte(uint64(big.MeanT)>>48),
 			byte(uint64(big.MeanT)>>56))
-
-		out.Write(buf)
 	}
 }
 
 func BenchmarkBigManualPreAlloc(b *testing.B) {
 	b.SetBytes(53283)
 	for i := 0; i < b.N; i++ {
-		out := &bytes.Buffer{}
 		size := 32 + len(big.Name)
 		for _, v := range big.Kids {
 			size += len(v) + 2
@@ -312,7 +366,6 @@ func BenchmarkBigManualPreAlloc(b *testing.B) {
 		buf[offset+6] = byte(uint64(big.MeanT) >> 48)
 		buf[offset+7] = byte(uint64(big.MeanT) >> 56)
 		offset += 8
-		out.Write(buf)
 	}
 }
 
@@ -320,18 +373,16 @@ func BenchmarkSmallGob(b *testing.B) {
 	b.SetBytes(58)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		out := &bytes.Buffer{}
-		enc := gob.NewEncoder(out)
+		enc := gob.NewEncoder(io.Discard)
 		enc.Encode(s)
 	}
 }
 
-func BenchmarkBigBinary(b *testing.B) {
+func BenchmarkBigGob(b *testing.B) {
 	b.SetBytes(53283)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		out := &bytes.Buffer{}
-		enc := gob.NewEncoder(out)
+		enc := gob.NewEncoder(io.Discard)
 		enc.Encode(big)
 	}
 }
