@@ -129,13 +129,26 @@ func (w *Writer) pushForLvl() {
 }
 
 func (w *Writer) popForLvl(name string) {
-	/*
-		for _, rangeForVar := name {
-			size += sizes[forLvl]
-			size += dynSize[forLvl][0] + ...
-		}
-	*/
 	// exprs are inserted in reverse order
+	defer func() {
+		w.dynamicSizes = w.dynamicSizes[:w.forLvl]
+		w.sizes = w.sizes[:w.forLvl]
+		w.forLvl -= 1
+	}()
+
+	// avoid adding a for that only sums a constant
+	// also avoids compiler error for unused variable
+	if len(w.dynamicSizes[w.forLvl]) == 0 && w.forLvl > 0 {
+		// remove closing bracket, not sure if this is sound
+		w.sizeExprs = w.sizeExprs[:len(w.sizeExprs)-1]
+
+		w.dynamicSizes[w.forLvl-1] = append(w.dynamicSizes[w.forLvl-1],
+			fmt.Sprintf("%d * len(%s)", w.sizes[w.forLvl], name),
+		)
+		return
+	}
+
+	// add dynamic sizes
 	if len(w.dynamicSizes[w.forLvl]) > 0 {
 		w.sizeExprs = append(w.sizeExprs,
 			fmt.Sprintf(
@@ -144,7 +157,8 @@ func (w *Writer) popForLvl(name string) {
 			),
 		)
 	}
-	w.dynamicSizes = w.dynamicSizes[:w.forLvl]
+
+	// add static sizes
 	sizeOp := "+="
 	if w.forLvl == 0 {
 		sizeOp = ":="
@@ -156,13 +170,11 @@ func (w *Writer) popForLvl(name string) {
 			w.sizes[w.forLvl],
 		),
 	)
-	w.sizes = w.sizes[:w.forLvl]
 	if w.forLvl > 0 {
 		w.sizeExprs = append(w.sizeExprs,
 			fmt.Sprintf(forStartFmt, rangeForVar(w.forLvl), name),
 		)
 	}
-	w.forLvl -= 1
 }
 
 func (w *Writer) WriteField(name string, t types.Type) {
