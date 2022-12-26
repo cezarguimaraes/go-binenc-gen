@@ -369,6 +369,71 @@ func BenchmarkBigManualPreAlloc(b *testing.B) {
 	}
 }
 
+func BenchmarkWrite64Individually(b *testing.B) {
+	b.SetBytes(8)
+	buf := make([]byte, 8)
+	offset := 0
+	muint := uint64(0xffffffffffffffff)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf[offset] = byte(muint)
+		buf[offset+1] = byte(muint >> 8)
+		buf[offset+2] = byte(muint >> 16)
+		buf[offset+3] = byte(muint >> 24)
+		buf[offset+4] = byte(muint >> 32)
+		buf[offset+5] = byte(muint >> 40)
+		buf[offset+6] = byte(muint >> 48)
+		buf[offset+7] = byte(muint >> 56)
+	}
+}
+
+func BenchmarkWrite64Copy(b *testing.B) {
+	b.SetBytes(8)
+	buf := make([]byte, 8)
+	offset := 0
+	muint := uint64(0xffffffffffffffff)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		copy(buf[offset:offset+8], []byte{
+			byte(muint),
+			byte(muint >> 8),
+			byte(muint >> 16),
+			byte(muint >> 24),
+			byte(muint >> 32),
+			byte(muint >> 40),
+			byte(muint >> 48),
+			byte(muint >> 56),
+		})
+	}
+}
+
+func BenchmarkWrite64ShiftVar(b *testing.B) {
+	b.SetBytes(8)
+	buf := make([]byte, 8)
+	offset := 0
+	muint := uint64(0xffffffffffffffff)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tmp := muint
+		buf[offset] = byte(tmp)
+		tmp >>= 8
+		buf[offset+1] = byte(tmp)
+		tmp >>= 8
+		buf[offset+2] = byte(tmp)
+		tmp >>= 8
+		buf[offset+3] = byte(tmp)
+		tmp >>= 8
+		buf[offset+4] = byte(tmp)
+		tmp >>= 8
+		buf[offset+5] = byte(tmp)
+		tmp >>= 8
+		buf[offset+6] = byte(tmp)
+		tmp >>= 8
+		buf[offset+7] = byte(tmp)
+
+	}
+}
+
 func BenchmarkSmallGob(b *testing.B) {
 	b.SetBytes(58)
 	b.ResetTimer()
