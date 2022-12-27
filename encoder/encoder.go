@@ -305,6 +305,7 @@ func indexForSize(lvl int) string {
 func (w *Writer) HeaderExpr() string {
 	var lines []string
 	if w.usedBuffer {
+		// TODO: use smallest buffer possible
 		lines = append(lines, "buf := make([]byte, 8)\n")
 	}
 	if w.usedSize {
@@ -329,10 +330,10 @@ func (w *Writer) ReadField(name string, t types.Type) {
 		w.usedSize = true
 		slcLen := "size"
 		w.readNumberN(slcLen, 2, true)
-		w.Printf("\t%s = make(%s, size)\n", name, w.typeName(slc))
+		w.Printf("\t%s = make(%s, %s)\n", name, w.typeName(slc), slcLen)
 		// intentionally never decrease forLvl
 		// to never reuse index variables
-		w.Printf("\t%s := int(size)\n", indexForSize(w.forLvl))
+		w.Printf("\t%s := int(%s)\n", indexForSize(w.forLvl), slcLen)
 		w.Printf("\tfor %s := 0; %s < %s; %s++ {\n", indexForVar(w.forLvl), indexForVar(w.forLvl), indexForSize(w.forLvl), indexForVar(w.forLvl))
 		w.forLvl += 1
 		w.ReadField(fmt.Sprintf("%s[%s]", name, indexForVar(w.forLvl-1)), slc.Elem())
@@ -347,6 +348,13 @@ func (w *Writer) ReadField(name string, t types.Type) {
 			selector := fmt.Sprintf("%s.%s", name, f.Name())
 			w.ReadField(selector, f.Type())
 		}
+		return
+	}
+	if arr, ok := t.(*types.Array); ok {
+		w.Printf("\tfor %s := 0; %s < %d; %s++ {\n", indexForVar(w.forLvl), indexForVar(w.forLvl), arr.Len(), indexForVar(w.forLvl))
+		w.forLvl += 1
+		w.ReadField(fmt.Sprintf("%s[%s]", name, indexForVar(w.forLvl-1)), arr.Elem())
+		w.Printf("\t}\n")
 		return
 	}
 	switch f := t.(type) {

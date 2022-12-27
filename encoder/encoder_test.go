@@ -115,7 +115,7 @@ func TestWriteField_Pointers(t *testing.T) {
 			t: types.NewPointer(types.Typ[types.Uint64]),
 		},
 		{
-			name: "*Int32",
+			name: "*int32",
 			want: []string{
 				"buf[offset] = byte(uint32(*test))",
 				"buf[offset + 1] = byte(uint32(*test) >> 8)",
@@ -127,7 +127,7 @@ func TestWriteField_Pointers(t *testing.T) {
 			t: types.NewPointer(types.Typ[types.Int32]),
 		},
 		{
-			name: "*Int64",
+			name: "*int64",
 			want: []string{
 				"buf[offset] = byte(uint64(*test))",
 				"buf[offset + 1] = byte(uint64(*test) >> 8)",
@@ -162,6 +162,18 @@ func TestReadField_Pointers(t *testing.T) {
 		want []string
 		t    types.Type
 	}{
+		{
+			name: "*[10]int8",
+			want: []string{
+				"test = new([10]int8)",
+				"for i := 0; i < 10; i++ {",
+				"r.Read(buf[:1])",
+				"*test[i] = int8(uint8(buf[0]))",
+				"}",
+				"",
+			},
+			t: types.NewPointer(types.NewArray(types.Typ[types.Int8], 10)),
+		},
 		{
 			name: "*byte",
 			want: []string{
@@ -511,6 +523,81 @@ func TestReadField_Array(t *testing.T) {
 		{
 			name: "[]int16",
 			want: []string{
+				"for i := 0; i < 10; i++ {",
+				"r.Read(buf[:2])",
+				"test[i] = int16(uint16(buf[0]) | (uint16(buf[1]) << 8))",
+				"}",
+				"",
+			},
+			wantHeaderExpr: []string{
+				"buf := make([]byte, 8)",
+				"",
+			},
+			t: types.NewArray(types.Typ[types.Int16], 10),
+		},
+		{
+			name: "[][]int16",
+			want: []string{
+				"for i := 0; i < 8; i++ {",
+				"for i1 := 0; i1 < 8; i1++ {",
+				"r.Read(buf[:2])",
+				"test[i][i1] = int16(uint16(buf[0]) | (uint16(buf[1]) << 8))",
+				"}",
+				"}",
+				"",
+			},
+			wantHeaderExpr: []string{
+				"buf := make([]byte, 8)",
+				"",
+			},
+			t: types.NewArray(types.NewArray(types.Typ[types.Int16], 8), 8),
+		},
+		{
+			name: "[]string",
+			want: []string{
+				"for i := 0; i < 16; i++ {",
+				"r.Read(buf[:2])",
+				"size = uint16(buf[0]) | (uint16(buf[1]) << 8)",
+				"strBuf_0 := make([]byte, size)",
+				"r.Read(strBuf_0)",
+				"test[i] = *(*string)(unsafe.Pointer(&strBuf_0))",
+				"}",
+				"",
+			},
+			wantHeaderExpr: []string{
+				"buf := make([]byte, 8)",
+				"var size uint16",
+				"",
+			},
+			t: types.NewArray(types.Typ[types.String], 16),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := encoder.NewWriter(nil)
+			e.ReadField("test", c.t)
+			lines := parseOutput(t, e)
+			if diff := cmp.Diff(c.want, lines); diff != "" {
+				t.Errorf("e.ReadField(%q, %q): (-want, +got):\n%s", "test", c.t.String(), diff)
+			}
+			sizeLines := splitLinesTrim(t, e.HeaderExpr())
+			if diff := cmp.Diff(c.wantHeaderExpr, sizeLines); diff != "" {
+				t.Errorf("e.HeaderExpr(): (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+func TestReadField_Slice(t *testing.T) {
+	cases := []struct {
+		name           string
+		want           []string
+		wantHeaderExpr []string
+		t              types.Type
+	}{
+		{
+			name: "[]int16",
+			want: []string{
 				"r.Read(buf[:2])",
 				"size = uint16(buf[0]) | (uint16(buf[1]) << 8)",
 				"test = make([]int16, size)",
@@ -522,7 +609,6 @@ func TestReadField_Array(t *testing.T) {
 				"",
 			},
 			wantHeaderExpr: []string{
-				// TODO: use smallest buffer possible
 				"buf := make([]byte, 8)",
 				"var size uint16",
 				"",
