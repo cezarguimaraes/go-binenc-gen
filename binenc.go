@@ -28,6 +28,115 @@
 //
 // Source adapted from https://cs.opensource.google/go/x/tools/+/refs/tags/v0.4.0:cmd/stringer/stringer.go
 
+// go-binenc-gen is a tool to automate the creation of binary serialization methods.
+// Given the name of a Go source file containing structs definitions, go-binenc-gen
+// will create a new self-contained Go source file implementing
+//
+//	func (s *T) Write(w io.Writer) (n int, err error)
+//	func (s *T) Read(r io.Reader) (err error)
+//
+// The file is created in the same package and directory as the package that defines
+// T. It has helpful defaults designed for use with go generate.
+//
+// The goal of the tool is to generate extremely fast binary serialization code by
+// forfeiting the convenience of runtime reflection enabled libraries, such as
+// binary or gob.
+//
+// For example, given this snippet,
+//
+//	package example
+//
+//	type Header struct {
+//		Name string
+//		Value string
+//	}
+//
+//	type Request struct {
+//		Headers []Header
+//		ResponseTime uin64
+//	}
+//
+// running this command
+//
+//	go-binenc-gen example.go
+//
+// in the same directory will create the file example_encoding.go, in package example,
+// containing definitions of
+//
+//	func (s *Header) Write(w io.Writer) (n int, err error)
+//	func (s *Header) Read(r io.Reader) (err error)
+//	func (s *Request) Write(w io.Writer) (n int, err error)
+//	func (s *Request) Read(r io.Reader) (err error)
+//
+// These methods will serialize Header and Request objects, using a single allocation
+// per Write. For Reads, there will be as many allocations as pointers and slices in
+// the struct:
+//
+//	func (s *Request) Write(w io.Writer) (n int, err error) {
+//	        size := 10
+//	        for _, v := range s.Headers {
+//	                size += 4
+//	                size += len(v.Name) + len(v.Value)
+//	        }
+//	        buf := make([]byte, size)
+//	        offset := 0
+//	        // Headers
+//	        buf[offset] = byte(len(s.Headers))
+//	        buf[offset+1] = byte(len(s.Headers) >> 8)
+//	        offset += 2
+//	        for _, v := range s.Headers {
+//	                buf[offset] = byte(len(v.Name))
+//	                buf[offset+1] = byte(len(v.Name) >> 8)
+//	                offset += 2
+//	                copy(buf[offset:], v.Name)
+//	                offset += len(v.Name)
+//	                buf[offset] = byte(len(v.Value))
+//	                buf[offset+1] = byte(len(v.Value) >> 8)
+//	                offset += 2
+//	                copy(buf[offset:], v.Value)
+//	                offset += len(v.Value)
+//	        }
+//	        // ResponseTime
+//	        buf[offset] = byte(s.ResponseTime)
+//	        buf[offset+1] = byte(s.ResponseTime >> 8)
+//	        buf[offset+2] = byte(s.ResponseTime >> 16)
+//	        buf[offset+3] = byte(s.ResponseTime >> 24)
+//	        buf[offset+4] = byte(s.ResponseTime >> 32)
+//	        buf[offset+5] = byte(s.ResponseTime >> 40)
+//	        buf[offset+6] = byte(s.ResponseTime >> 48)
+//	        buf[offset+7] = byte(s.ResponseTime >> 56)
+//	        offset += 8
+//	        return w.Write(buf)
+//	}
+//
+//	func (s *Request) Read(r io.Reader) error {
+//	        buf := make([]byte, 8)
+//	        var size uint16
+//	        // Headers
+//	        r.Read(buf[:2])
+//	        size = uint16(buf[0]) | (uint16(buf[1]) << 8)
+//	        s.Headers = make([]Header, size)
+//	        si := int(size)
+//	        for i := 0; i < si; i++ {
+//	                r.Read(buf[:2])
+//	                size = uint16(buf[0]) | (uint16(buf[1]) << 8)
+//	                strBuf_0 := make([]byte, size)
+//	                r.Read(strBuf_0)
+//	                s.Headers[i].Name = *(*string)(unsafe.Pointer(&strBuf_0))
+//	                r.Read(buf[:2])
+//	                size = uint16(buf[0]) | (uint16(buf[1]) << 8)
+//	                strBuf_1 := make([]byte, size)
+//	                r.Read(strBuf_1)
+//	                s.Headers[i].Value = *(*string)(unsafe.Pointer(&strBuf_1))
+//	        }
+//	        // ResponseTime
+//	        r.Read(buf[:8])
+//	        s.ResponseTime = uint64(buf[0]) | (uint64(buf[1]) << 8) | (uint64(buf[2]) << 16) | (uint64(buf[3]) << 24) | (uint64(buf[4]) << 32) | (uint64(buf[5]) << 40) | (uint64(buf[6]) << 48) | (uint64(buf[7]) << 56)
+//	        return nil
+//	}
+//
+// Note that the serialization of Header objects during the serialization of a Request
+// is inlined. For that reason, recursive definitions are not yet supported.
 package main
 
 import (
