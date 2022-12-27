@@ -25,6 +25,7 @@ const (
 	booleanFmt       = "\tif %s {\n\t" + byteFmt + "\t} else {\n\t" + byteFmt + "\t}\n"
 	forStartFmt      = "\tfor _, %s := range %s {\n"
 	readBytesFmt     = "\tr.Read(buf[:%d])\n"
+	bytesCastFmt     = "(*(*[%d]byte)(unsafe.Pointer(&(%s))))[:]"
 )
 
 func abs(x int) int {
@@ -214,6 +215,12 @@ func rangeForVar(lvl int) string {
 	return fmt.Sprintf("v%d", lvl-1)
 }
 
+func (w *Writer) writeBytes(name string, nbytes int) {
+	w.needUnsafe = true
+	w.Printf(copyFmt, fmt.Sprintf(bytesCastFmt, nbytes, name))
+	w.addOffset(nbytes)
+}
+
 func (w *Writer) writeField(name string, t types.Type) {
 	t = t.Underlying()
 	if ptr, ok := t.(*types.Pointer); ok {
@@ -261,6 +268,9 @@ func (w *Writer) writeField(name string, t types.Type) {
 			w.writeBoolean(name)
 		} else if info&types.IsString != 0 {
 			w.writeString(name)
+		} else if info&types.IsFloat != 0 || info&types.IsComplex != 0 {
+			size := w.stdSizes.Sizeof(f)
+			w.writeBytes(name, int(size))
 		} else {
 			log.Printf("unknown type: %s\n", f.Name())
 		}
@@ -338,6 +348,11 @@ func (w *Writer) typeName(t types.Type) string {
 	return types.TypeString(t, types.RelativeTo(w.pkg))
 }
 
+func (w *Writer) readBytes(name string, nbytes int) {
+	w.needUnsafe = true
+	w.Printf("\tr.Read(%s)\n", fmt.Sprintf(bytesCastFmt, nbytes, name))
+}
+
 func (w *Writer) ReadField(name string, t types.Type) {
 	t = t.Underlying()
 	if ptr, ok := t.(*types.Pointer); ok {
@@ -390,6 +405,9 @@ func (w *Writer) ReadField(name string, t types.Type) {
 			w.readBoolean(name)
 		} else if info&types.IsString != 0 {
 			w.readString(name)
+		} else if info&types.IsFloat != 0 || info&types.IsComplex != 0 {
+			size := w.stdSizes.Sizeof(f)
+			w.readBytes(name, int(size))
 		} else {
 			log.Printf("unknown type: %s\n", f.Name())
 		}
