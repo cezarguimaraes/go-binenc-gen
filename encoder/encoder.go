@@ -234,7 +234,9 @@ func (w *Writer) writeField(name string, t types.Type) {
 	if s, ok := t.(*types.Struct); ok {
 		for i := 0; i < s.NumFields(); i++ {
 			f := s.Field(i)
-			// TODO: handle embed and blank fields
+			if f.Name() == "_" {
+				continue
+			}
 			selector := fmt.Sprintf("%s.%s", name, f.Name())
 			w.writeField(selector, f.Type())
 		}
@@ -362,7 +364,9 @@ func (w *Writer) ReadField(name string, t types.Type) {
 	if s, ok := t.(*types.Struct); ok {
 		for i := 0; i < s.NumFields(); i++ {
 			f := s.Field(i)
-			// TODO: handle embed and blank fields
+			if f.Name() == "_" {
+				continue
+			}
 			selector := fmt.Sprintf("%s.%s", name, f.Name())
 			w.ReadField(selector, f.Type())
 		}

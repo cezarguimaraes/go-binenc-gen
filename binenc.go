@@ -214,9 +214,8 @@ func isDirectory(name string) bool {
 }
 
 type Struct struct {
-	name   string
-	fields []string
-	types  []types.Type
+	Name string
+	Type types.Type
 }
 
 type File struct {
@@ -307,15 +306,10 @@ func (g *Generator) format() []byte {
 }
 
 func (g *Generator) generateWrite(s *Struct) {
-	g.Printf("func (s *%s) Write(w io.Writer) (n int, err error) {\n", s.name)
+	g.Printf("func (s *%s) Write(w io.Writer) (n int, err error) {\n", s.Name)
 	e := encoder.NewWriter(g.types)
 	e.Printf("\toffset := 0\n")
-	for i, name := range s.fields {
-		selector := fmt.Sprintf("s.%s", name)
-		e.Printf("\t// %s\n", name)
-		t := s.types[i]
-		e.WriteField(selector, t)
-	}
+	e.WriteField("s", s.Type)
 	e.Printf("\treturn w.Write(buf)\n")
 	e.Printf("}\n\n")
 	g.Printf(e.SizeExpr())
@@ -324,14 +318,9 @@ func (g *Generator) generateWrite(s *Struct) {
 }
 
 func (g *Generator) generateRead(s *Struct) {
-	g.Printf("func (s *%s) Read(r io.Reader) error {\n", s.name)
+	g.Printf("func (s *%s) Read(r io.Reader) error {\n", s.Name)
 	e := encoder.NewWriter(g.types)
-	for i, name := range s.fields {
-		selector := fmt.Sprintf("s.%s", name)
-		e.Printf("\t// %s\n", name)
-		t := s.types[i]
-		e.ReadField(selector, t)
-	}
+	e.ReadField("s", s.Type)
 	g.Printf(e.HeaderExpr())
 	e.WriteTo(&g.buf)
 	g.Printf("\treturn nil\n")
@@ -360,16 +349,8 @@ func (f *File) inspectNode(node ast.Node) bool {
 			log.Printf("not struct type or missing field list")
 			continue
 		}
-		s := &Struct{name: tspec.Name.Name}
-		for _, field := range st.Fields.List {
-			if len(field.Names) != 1 {
-				log.Printf("warning: ignoring field because len(field.Names) != 1: %s\n", field.Names)
-				continue
-			}
-			s.fields = append(s.fields, field.Names[0].Name)
-			s.types = append(s.types, f.pkg.typeInfo.TypeOf(field.Type))
-		}
-		f.structs = append(f.structs, s)
+		t := f.pkg.typeInfo.TypeOf(st)
+		f.structs = append(f.structs, &Struct{tspec.Name.Name, t})
 	}
 	return false
 }
