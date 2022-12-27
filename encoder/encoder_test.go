@@ -1,6 +1,7 @@
 package encoder_test
 
 import (
+	"go/token"
 	"go/types"
 	"strings"
 	"testing"
@@ -145,7 +146,7 @@ func TestWriteField_Pointers(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := encoder.NewWriter()
+			e := encoder.NewWriter(nil)
 			e.WriteField("test", c.t)
 			lines := parseOutput(t, e)
 			if diff := cmp.Diff(c.want, lines); diff != "" {
@@ -246,7 +247,7 @@ func TestReadField_Pointers(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := encoder.NewWriter()
+			e := encoder.NewWriter(nil)
 			e.ReadField("test", c.t)
 			lines := parseOutput(t, e)
 			if diff := cmp.Diff(c.want, lines); diff != "" {
@@ -347,7 +348,7 @@ func TestReadField_IntegerTypes(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := encoder.NewWriter()
+			e := encoder.NewWriter(nil)
 			e.ReadField("test", c.t)
 			lines := parseOutput(t, e)
 			if diff := cmp.Diff(c.want, lines); diff != "" {
@@ -470,7 +471,7 @@ func TestWriteField_IntegerTypes(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := encoder.NewWriter()
+			e := encoder.NewWriter(nil)
 			e.WriteField("test", c.t)
 			lines := parseOutput(t, e)
 			if diff := cmp.Diff(c.want, lines); diff != "" {
@@ -493,7 +494,7 @@ func TestReadField_Array(t *testing.T) {
 				"r.Read(buf[:2])",
 				"size = uint16(buf[0]) | (uint16(buf[1]) << 8)",
 				"test = make([]int16, size)",
-				"si := size",
+				"si := int(size)",
 				"for i := 0; i < si; i++ {",
 				"r.Read(buf[:2])",
 				"test[i] = int16(uint16(buf[0]) | (uint16(buf[1]) << 8))",
@@ -503,7 +504,7 @@ func TestReadField_Array(t *testing.T) {
 			wantHeaderExpr: []string{
 				// TODO: use smallest buffer possible
 				"buf := make([]byte, 8)",
-				"var size int",
+				"var size uint16",
 				"",
 			},
 			t: types.NewSlice(types.Typ[types.Int16]),
@@ -514,12 +515,12 @@ func TestReadField_Array(t *testing.T) {
 				"r.Read(buf[:2])",
 				"size = uint16(buf[0]) | (uint16(buf[1]) << 8)",
 				"test = make([][]int16, size)",
-				"si := size",
+				"si := int(size)",
 				"for i := 0; i < si; i++ {",
 				"r.Read(buf[:2])",
 				"size = uint16(buf[0]) | (uint16(buf[1]) << 8)",
 				"test[i] = make([]int16, size)",
-				"si1 := size",
+				"si1 := int(size)",
 				"for i1 := 0; i1 < si1; i1++ {",
 				"r.Read(buf[:2])",
 				"test[i][i1] = int16(uint16(buf[0]) | (uint16(buf[1]) << 8))",
@@ -529,7 +530,7 @@ func TestReadField_Array(t *testing.T) {
 			},
 			wantHeaderExpr: []string{
 				"buf := make([]byte, 8)",
-				"var size int",
+				"var size uint16",
 				"",
 			},
 			t: types.NewSlice(types.NewSlice(types.Typ[types.Int16])),
@@ -540,7 +541,7 @@ func TestReadField_Array(t *testing.T) {
 				"r.Read(buf[:2])",
 				"size = uint16(buf[0]) | (uint16(buf[1]) << 8)",
 				"test = make([]string, size)",
-				"si := size",
+				"si := int(size)",
 				"for i := 0; i < si; i++ {",
 				"r.Read(buf[:2])",
 				"size = uint16(buf[0]) | (uint16(buf[1]) << 8)",
@@ -552,7 +553,7 @@ func TestReadField_Array(t *testing.T) {
 			},
 			wantHeaderExpr: []string{
 				"buf := make([]byte, 8)",
-				"var size int",
+				"var size uint16",
 				"",
 			},
 			t: types.NewSlice(types.Typ[types.String]),
@@ -561,7 +562,7 @@ func TestReadField_Array(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := encoder.NewWriter()
+			e := encoder.NewWriter(nil)
 			e.ReadField("test", c.t)
 			lines := parseOutput(t, e)
 			if diff := cmp.Diff(c.want, lines); diff != "" {
@@ -659,7 +660,7 @@ func TestWriteField_Array(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := encoder.NewWriter()
+			e := encoder.NewWriter(nil)
 			e.WriteField("test", c.t)
 			lines := parseOutput(t, e)
 			if diff := cmp.Diff(c.want, lines); diff != "" {
@@ -674,7 +675,7 @@ func TestWriteField_Array(t *testing.T) {
 }
 
 func TestReadField_Boolean(t *testing.T) {
-	e := encoder.NewWriter()
+	e := encoder.NewWriter(nil)
 	e.ReadField("test", types.Typ[types.Bool])
 	got := parseOutput(t, e)
 	want := []string{
@@ -692,7 +693,7 @@ func TestReadField_Boolean(t *testing.T) {
 }
 
 func TestWriteField_Boolean(t *testing.T) {
-	e := encoder.NewWriter()
+	e := encoder.NewWriter(nil)
 	e.WriteField("test", types.Typ[types.Bool])
 	got := parseOutput(t, e)
 	want := []string{
@@ -709,7 +710,7 @@ func TestWriteField_Boolean(t *testing.T) {
 }
 
 func TestReadField_String(t *testing.T) {
-	e := encoder.NewWriter()
+	e := encoder.NewWriter(nil)
 	e.ReadField("test", types.Typ[types.String])
 	got := parseOutput(t, e)
 	want := []string{
@@ -725,7 +726,7 @@ func TestReadField_String(t *testing.T) {
 	}
 }
 func TestWriteField_String(t *testing.T) {
-	e := encoder.NewWriter()
+	e := encoder.NewWriter(nil)
 	e.WriteField("test", types.Typ[types.String])
 	got := parseOutput(t, e)
 	want := []string{
@@ -738,5 +739,109 @@ func TestWriteField_String(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("e.WriteField(%q, %q): (-want, +got):\n%s", "test", types.Typ[types.String].String(), diff)
+	}
+}
+
+func TestWriteField_Struct(t *testing.T) {
+	e := encoder.NewWriter(nil)
+	st := types.NewStruct(
+		[]*types.Var{
+			types.NewVar(token.NoPos, nil, "x", types.Typ[types.Uint16]),
+			types.NewVar(token.NoPos, nil, "y", types.Typ[types.Uint16]),
+		},
+		nil,
+	)
+	e.WriteField("test", st)
+	got := parseOutput(t, e)
+	want := []string{
+		"buf[offset] = byte(test.x)",
+		"buf[offset + 1] = byte(test.x >> 8)",
+		"offset += 2",
+		"buf[offset] = byte(test.y)",
+		"buf[offset + 1] = byte(test.y >> 8)",
+		"offset += 2",
+		"",
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("e.WriteField(%q, %q): (-want, +got):\n%s", "test", st.String(), diff)
+	}
+}
+
+func TestWriteField_StructArraysStruct(t *testing.T) {
+	// type Inner struct {
+	//	foo uint32
+	// 	arr []uint8
+	// }
+
+	innerT := types.NewStruct([]*types.Var{
+		types.NewVar(token.NoPos, nil, "foo", types.Typ[types.Uint32]),
+		types.NewVar(token.NoPos, nil, "arr", types.NewSlice(types.Typ[types.Uint32])),
+	}, nil)
+
+	//type Outer struct {
+	//	arr1   []uint8
+	//	inners []Inner
+	//	arr2   []uint8
+	//}
+
+	st := types.NewStruct([]*types.Var{
+		types.NewVar(token.NoPos, nil, "arr1", types.NewSlice(types.Typ[types.Uint8])),
+		types.NewVar(token.NoPos, nil, "inners", types.NewSlice(innerT)),
+		types.NewVar(token.NoPos, nil, "arr2", types.NewSlice(types.Typ[types.Uint8])),
+	}, nil)
+
+	e := encoder.NewWriter(nil)
+	e.WriteField("test", st)
+	got := parseOutput(t, e)
+	want := []string{
+		"buf[offset] = byte(len(test.arr1))",
+		"buf[offset + 1] = byte(len(test.arr1) >> 8)",
+		"offset += 2",
+		"for _, v := range test.arr1 {",
+		"buf[offset] = byte(v)",
+		"offset += 1",
+		"}",
+		"buf[offset] = byte(len(test.inners))",
+		"buf[offset + 1] = byte(len(test.inners) >> 8)",
+		"offset += 2",
+		"for _, v := range test.inners {",
+		"buf[offset] = byte(v.foo)",
+		"buf[offset + 1] = byte(v.foo >> 8)",
+		"buf[offset + 2] = byte(v.foo >> 16)",
+		"buf[offset + 3] = byte(v.foo >> 24)",
+		"offset += 4",
+		"buf[offset] = byte(len(v.arr))",
+		"buf[offset + 1] = byte(len(v.arr) >> 8)",
+		"offset += 2",
+		"for _, v1 := range v.arr {",
+		"buf[offset] = byte(v1)",
+		"buf[offset + 1] = byte(v1 >> 8)",
+		"buf[offset + 2] = byte(v1 >> 16)",
+		"buf[offset + 3] = byte(v1 >> 24)",
+		"offset += 4",
+		"}",
+		"}",
+		"buf[offset] = byte(len(test.arr2))",
+		"buf[offset + 1] = byte(len(test.arr2) >> 8)",
+		"offset += 2",
+		"for _, v := range test.arr2 {",
+		"buf[offset] = byte(v)",
+		"offset += 1",
+		"}",
+		"",
+	}
+	wantSizeExpr := []string{
+		"size := 6",
+		"size += 1 * len(test.arr1) + 1 * len(test.arr2)",
+		"for _, v := range test.inners {",
+		"size += 6",
+		"size += 4 * len(v.arr)",
+		"}",
+		""}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("e.WriteField(%q, %q): (-want, +got):\n%s", "test", st.String(), diff)
+	}
+	if diff := cmp.Diff(wantSizeExpr, splitLinesTrim(t, e.SizeExpr())); diff != "" {
+		t.Errorf("e.SizeExpr(): (-want, +got):\n%s", diff)
 	}
 }

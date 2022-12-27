@@ -125,9 +125,10 @@ type Package struct {
 }
 
 type Generator struct {
-	hdr bytes.Buffer
-	buf bytes.Buffer
-	pkg *Package
+	hdr   bytes.Buffer
+	buf   bytes.Buffer
+	pkg   *Package
+	types *types.Package
 
 	needUnsafe bool
 }
@@ -156,6 +157,7 @@ func (g *Generator) addPackage(pkg *packages.Package) {
 		typeInfo: pkg.TypesInfo,
 		files:    make([]*File, len(pkg.Syntax)),
 	}
+	g.types = pkg.Types
 
 	for i, file := range pkg.Syntax {
 		g.pkg.files[i] = &File{
@@ -197,7 +199,7 @@ func (g *Generator) format() []byte {
 
 func (g *Generator) generateWrite(s *Struct) {
 	g.Printf("func (s *%s) Write(w io.Writer) (n int, err error) {\n", s.name)
-	e := encoder.NewWriter()
+	e := encoder.NewWriter(g.types)
 	e.Printf("\toffset := 0\n")
 	for i, name := range s.fields {
 		selector := fmt.Sprintf("s.%s", name)
@@ -214,7 +216,7 @@ func (g *Generator) generateWrite(s *Struct) {
 
 func (g *Generator) generateRead(s *Struct) {
 	g.Printf("func (s *%s) Read(r io.Reader) error {\n", s.name)
-	e := encoder.NewWriter()
+	e := encoder.NewWriter(g.types)
 	for i, name := range s.fields {
 		selector := fmt.Sprintf("s.%s", name)
 		e.Printf("\t// %s\n", name)

@@ -63,6 +63,7 @@ type Writer struct {
 	buf *bytes.Buffer
 
 	stdSizes *types.StdSizes
+	pkg      *types.Package
 
 	sizeExprs    []string
 	dynamicSizes [][]string
@@ -77,13 +78,14 @@ type Writer struct {
 	needUnsafe  bool
 }
 
-func NewWriter() *Writer {
+func NewWriter(pkg *types.Package) *Writer {
 	enc := &Writer{
 		buf: &bytes.Buffer{},
 		stdSizes: &types.StdSizes{
 			WordSize: 4,
 			MaxAlign: 4,
 		},
+		pkg:    pkg,
 		forLvl: -1,
 	}
 	enc.pushForLvl()
@@ -219,7 +221,15 @@ func (w *Writer) writeField(name string, t types.Type) {
 		w.Printf("\t}\n")
 		return
 	}
-	// TODO: handle structs
+	if s, ok := t.(*types.Struct); ok {
+		for i := 0; i < s.NumFields(); i++ {
+			f := s.Field(i)
+			// TODO: handle embed and blank fields
+			selector := fmt.Sprintf("%s.%s", name, f.Name())
+			w.writeField(selector, f.Type())
+		}
+		return
+	}
 	switch f := t.(type) {
 	case *types.Basic:
 		info := f.Info()
@@ -248,7 +258,6 @@ func (w *Writer) readNumberN(name string, nbytes int, unsigned bool) {
 		start, end, incr = nbytes-1, -1, -1
 	}
 	for i := start; i != end; i += incr {
-		// w.writeByte(abs(i-start), rshift(name, i), false)
 		b := fmt.Sprintf("buf[%d]", abs(i-start))
 		b = fmt.Sprintf(unsignedCastFmt, 8*nbytes, b)
 		exprParts = append(exprParts, lshift(b, i))
@@ -317,7 +326,7 @@ func (w *Writer) ReadField(name string, t types.Type) {
 		w.usedSize = true
 		slcLen := "size"
 		w.readNumberN(slcLen, 2, true)
-		w.Printf("\t%s = make(%s, size)\n", name, slc.String())
+		w.Printf("\t%s = make(%s, size)\n", name, types.TypeString(slc, types.RelativeTo(w.pkg)))
 		// intentionally never decrease forLvl
 		// to never reuse index variables
 		w.Printf("\t%s := int(size)\n", indexForSize(w.forLvl))
@@ -327,7 +336,16 @@ func (w *Writer) ReadField(name string, t types.Type) {
 		w.Printf("\t}\n")
 		return
 	}
-	// TODO: handle structs
+	// TODO: add tests for read
+	if s, ok := t.(*types.Struct); ok {
+		for i := 0; i < s.NumFields(); i++ {
+			f := s.Field(i)
+			// TODO: handle embed and blank fields
+			selector := fmt.Sprintf("%s.%s", name, f.Name())
+			w.ReadField(selector, f.Type())
+		}
+		return
+	}
 	switch f := t.(type) {
 	case *types.Basic:
 		info := f.Info()
