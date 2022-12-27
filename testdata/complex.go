@@ -14,15 +14,15 @@ type Complex struct {
 
 func main() {
 	s := &Complex{
-		Complex32: 4.2 - 28i,
-		Complex64: -136.3737 + 30e2i,
+		Complex64:  4.2 - 28i,
+		Complex128: -136.3737 + 30e2i,
 	}
 
 	var buf bytes.Buffer
-	s.Write(&buf)
+	s.WriteTo(&buf)
 
 	o := new(Complex)
-	o.Read(&buf)
+	o.ReadFrom(&buf)
 
 	if diff := cmp.Diff(s, o); diff != "" {
 		panic("complex.go: \n" + diff)

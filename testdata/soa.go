@@ -38,10 +38,10 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	s.Write(&buf)
+	s.WriteTo(&buf)
 
 	o := new(Outer)
-	o.Read(&buf)
+	o.ReadFrom(&buf)
 
 	if diff := cmp.Diff(s, o); diff != "" {
 		panic("soa.go: \n" + diff)

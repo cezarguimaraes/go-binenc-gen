@@ -32,8 +32,8 @@
 // Given the name of a Go source file containing structs definitions, go-binenc-gen
 // will create a new self-contained Go source file implementing
 //
-//	func (s *T) Write(w io.Writer) (n int, err error)
-//	func (s *T) Read(r io.Reader) (err error)
+//	func (s *T) WriteTo(w io.Writer) (n int, err error)
+//	func (s *T) ReadFrom(r io.Reader) (err error)
 //
 // The file is created in the same package and directory as the package that defines
 // T. It has helpful defaults designed for use with go generate.
@@ -63,16 +63,16 @@
 // in the same directory will create the file example_encoding.go, in package example,
 // containing definitions of
 //
-//	func (s *Header) Write(w io.Writer) (n int, err error)
-//	func (s *Header) Read(r io.Reader) (err error)
-//	func (s *Request) Write(w io.Writer) (n int, err error)
-//	func (s *Request) Read(r io.Reader) (err error)
+//	func (s *Header) WriteTo(w io.Writer) (n int, err error)
+//	func (s *Header) ReadFrom(r io.Reader) (err error)
+//	func (s *Request) WriteTo(w io.Writer) (n int, err error)
+//	func (s *Request) ReadFrom(r io.Reader) (err error)
 //
 // These methods will serialize Header and Request objects, using a single allocation
-// per Write. For Reads, there will be as many allocations as pointers and slices in
+// per WriteTo. For Reads, there will be as many allocations as pointers and slices in
 // the struct:
 //
-//	func (s *Request) Write(w io.Writer) (n int, err error) {
+//	func (s *Request) WriteTo(w io.Writer) (n int, err error) {
 //	        size := 10
 //	        for _, v := range s.Headers {
 //	                size += 4
@@ -306,7 +306,7 @@ func (g *Generator) format() []byte {
 }
 
 func (g *Generator) generateWrite(s *Struct) {
-	g.Printf("func (s *%s) Write(w io.Writer) (n int, err error) {\n", s.Name)
+	g.Printf("func (s *%s) WriteTo(w io.Writer) (n int, err error) {\n", s.Name)
 	e := encoder.NewWriter(g.types)
 	e.Printf("\toffset := 0\n")
 	e.WriteField("s", s.Type)
@@ -318,7 +318,11 @@ func (g *Generator) generateWrite(s *Struct) {
 }
 
 func (g *Generator) generateRead(s *Struct) {
-	g.Printf("func (s *%s) Read(r io.Reader) error {\n", s.Name)
+	// TODO: decide how to handle errors from r.Read calls.
+	// For performance reasons I'd like to avoid an `if err != nil`
+	// after each call. Perhaps we can generate a ReadFrom and
+	// UnsafeReadFrom which ignores errors?
+	g.Printf("func (s *%s) ReadFrom(r io.Reader) error {\n", s.Name)
 	e := encoder.NewWriter(g.types)
 	e.ReadField("s", s.Type)
 	g.Printf(e.HeaderExpr())

@@ -33,14 +33,10 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	s.Write(&buf)
-
-	// fmt.Println("% x", buf.Bytes())
+	s.WriteTo(&buf)
 
 	o := new(Static)
-	o.Read(&buf)
-
-	// fmt.Printf("%+v", o)
+	o.ReadFrom(&buf)
 
 	if diff := cmp.Diff(s, o); diff != "" {
 		panic("static.go: \n" + diff)
