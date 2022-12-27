@@ -60,12 +60,12 @@ func TestEndToEnd(t *testing.T) {
 	}
 	// Generate, compile, and run the test programs.
 	for _, name := range names {
-		if name == "typeparams" {
-			// ignore the directory containing the tests with type params
-			continue
-		}
 		if !strings.HasSuffix(name, ".go") {
 			t.Errorf("%s is not a Go file", name)
+			continue
+		}
+		if strings.HasSuffix(name, "_encoding.go") {
+			t.Logf("ignoring generated %s file", name)
 			continue
 		}
 		binencCompileAndRun(t, dir, binenc, name)
