@@ -19,10 +19,12 @@ const (
 	indexFmt         = staticIndex + " + %d"
 	unsignedCastFmt  = "uint%d(%s)"
 	rshiftFmt        = "%s >> %d"
+	lshiftFmt        = "(%s << %d)"
 	lenFmt           = "len(%s)"
 	copyFmt          = "\tcopy(buf[" + staticIndex + ":], %s)\n"
 	booleanFmt       = "\tif %s {\n\t" + byteFmt + "\t} else {\n\t" + byteFmt + "\t}\n"
 	forStartFmt      = "\tfor _, %s := range %s {\n"
+	readBytesFmt     = "\tr.Read(buf[:%d])\n"
 )
 
 func abs(x int) int {
@@ -50,6 +52,13 @@ func rshift(name string, n int) string {
 	return fmt.Sprintf(rshiftFmt, name, n*8)
 }
 
+func lshift(name string, n int) string {
+	if n == 0 {
+		return name
+	}
+	return fmt.Sprintf(lshiftFmt, name, n*8)
+}
+
 type Writer struct {
 	buf *bytes.Buffer
 
@@ -61,6 +70,10 @@ type Writer struct {
 	forLvl       int
 
 	bigEndian bool
+
+	strBufCount int
+	usedSize    bool
+	usedBuffer  bool
 }
 
 func NewWriter() *Writer {
@@ -217,6 +230,113 @@ func (w *Writer) writeField(name string, t types.Type) {
 			w.writeBoolean(name)
 		} else if info&types.IsString != 0 {
 			w.writeString(name)
+		} else {
+			log.Printf("unknown type: %s\n", f.Name())
+		}
+	default:
+		log.Printf("unknown type: %T\n", f)
+	}
+}
+
+func (w *Writer) readNumberN(name string, nbytes int, unsigned bool) {
+	w.usedBuffer = true
+	w.Printf(readBytesFmt, nbytes)
+	exprParts := []string{}
+	start, end, incr := 0, nbytes, 1
+	if w.bigEndian {
+		start, end, incr = nbytes-1, -1, -1
+	}
+	for i := start; i != end; i += incr {
+		// w.writeByte(abs(i-start), rshift(name, i), false)
+		b := fmt.Sprintf("buf[%d]", abs(i-start))
+		b = fmt.Sprintf(unsignedCastFmt, 8*nbytes, b)
+		exprParts = append(exprParts, lshift(b, i))
+	}
+	expr := strings.Join(exprParts, " | ")
+	if !unsigned {
+		expr = fmt.Sprintf("int%d(%s)", 8*nbytes, expr)
+	}
+	w.Printf("\t%s = %s\n", name, expr)
+}
+
+func (w *Writer) readBoolean(name string) {
+	w.Printf(readBytesFmt, 1)
+	w.Printf("\tif buf[0] == byte(0x01) {\n")
+	w.Printf("\t%s = true\n", name)
+	w.Printf("} else {\n")
+	w.Printf("\t%s = false\n", name)
+	w.Printf("}\n")
+}
+
+func (w *Writer) readString(name string) {
+	w.usedSize = true
+	w.readNumberN("size", 2, true)
+	w.Printf("\tstrBuf_%d := make([]byte, size)\n", w.strBufCount)
+	w.Printf("\tr.Read(strBuf_%d)\n", w.strBufCount)
+	w.Printf("\t%s = *(*string)(unsafe.Pointer(&strBuf_%d))\n", name, w.strBufCount)
+	w.strBufCount += 1
+}
+
+func indexForVar(lvl int) string {
+	if lvl == 0 {
+		return "i"
+	}
+	return fmt.Sprintf("i%d", lvl)
+}
+
+func indexForSize(lvl int) string {
+	if lvl == 0 {
+		return "si"
+	}
+	return fmt.Sprintf("si%d", lvl)
+}
+
+func (w *Writer) HeaderExpr() string {
+	var lines []string
+	if w.usedBuffer {
+		lines = append(lines, "buf := make([]byte, 8)\n")
+	}
+	if w.usedSize {
+		lines = append(lines, "var size int\n")
+	}
+	return strings.Join(lines, "")
+}
+
+func (w *Writer) ReadField(name string, t types.Type) {
+	t = t.Underlying()
+	if ptr, ok := t.(*types.Pointer); ok {
+		// TODO: allocate destination
+		// like we do for slices
+		w.ReadField("*"+name, ptr.Elem())
+		return
+	}
+	if slc, ok := t.(*types.Slice); ok {
+		// TODO: specially handle []byte
+		w.usedSize = true
+		slcLen := "size"
+		w.readNumberN(slcLen, 2, true)
+		w.Printf("\t%s = make(%s, size)\n", name, slc.String())
+		// intentionally never decrease forLvl
+		// to never reuse index variables
+		w.Printf("\t%s := size\n", indexForSize(w.forLvl))
+		w.Printf("\tfor %s := 0; %s < %s; %s++ {\n", indexForVar(w.forLvl), indexForVar(w.forLvl), indexForSize(w.forLvl), indexForVar(w.forLvl))
+		w.forLvl += 1
+		w.ReadField(fmt.Sprintf("%s[%s]", name, indexForVar(w.forLvl-1)), slc.Elem())
+		w.Printf("\t}\n")
+		return
+	}
+	// TODO: handle structs
+	switch f := t.(type) {
+	case *types.Basic:
+		info := f.Info()
+		if info&types.IsInteger != 0 {
+			unsigned := info&types.IsUnsigned != 0
+			size := w.stdSizes.Sizeof(f)
+			w.readNumberN(name, int(size), unsigned)
+		} else if info&types.IsBoolean != 0 {
+			w.readBoolean(name)
+		} else if info&types.IsString != 0 {
+			w.readString(name)
 		} else {
 			log.Printf("unknown type: %s\n", f.Name())
 		}
