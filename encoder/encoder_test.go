@@ -690,6 +690,86 @@ func TestWriteField_Array(t *testing.T) {
 		t            types.Type
 	}{
 		{
+			name: "[10]int16",
+			want: []string{
+				"for i1 := 0; i1 < 10; i1++ {",
+				"buf[offset] = byte(uint16(test[i1]))",
+				"buf[offset + 1] = byte(uint16(test[i1]) >> 8)",
+				"offset += 2",
+				"}",
+				"",
+			},
+			wantSizeExpr: []string{
+				"size := 20",
+				"",
+			},
+			t: types.NewArray(types.Typ[types.Int16], 10),
+		},
+		{
+			name: "[8][8]int16",
+			want: []string{
+				"for i1 := 0; i1 < 8; i1++ {",
+				"for i2 := 0; i2 < 8; i2++ {",
+				"buf[offset] = byte(uint16(test[i1][i2]))",
+				"buf[offset + 1] = byte(uint16(test[i1][i2]) >> 8)",
+				"offset += 2",
+				"}",
+				"}",
+				"",
+			},
+			wantSizeExpr: []string{
+				"size := 128",
+				"",
+			},
+			t: types.NewArray(types.NewArray(types.Typ[types.Int16], 8), 8),
+		},
+		{
+			name: "[16]string",
+			want: []string{
+				"for i1 := 0; i1 < 16; i1++ {",
+				"buf[offset] = byte(len(test[i1]))",
+				"buf[offset + 1] = byte(len(test[i1]) >> 8)",
+				"offset += 2",
+				"copy(buf[offset:], test[i1])",
+				"offset += len(test[i1])",
+				"}",
+				"",
+			},
+			wantSizeExpr: []string{
+				"size := 0",
+				"for i1 := 0; i1 < 16; i1++ {",
+				"size += 2",
+				"size += len(test[i1])",
+				"}",
+				"",
+			},
+			t: types.NewArray(types.Typ[types.String], 16),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := encoder.NewWriter(nil)
+			e.WriteField("test", c.t)
+			lines := parseOutput(t, e)
+			if diff := cmp.Diff(c.want, lines); diff != "" {
+				t.Errorf("e.WriteField(%q, %q): (-want, +got):\n%s", "test", c.t.String(), diff)
+			}
+			sizeLines := splitLinesTrim(t, e.SizeExpr())
+			if diff := cmp.Diff(c.wantSizeExpr, sizeLines); diff != "" {
+				t.Errorf("e.SizeExpr(): (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+func TestWriteField_Slice(t *testing.T) {
+	cases := []struct {
+		name         string
+		want         []string
+		wantSizeExpr []string
+		t            types.Type
+	}{
+		{
 			name: "[]int16",
 			want: []string{
 				"buf[offset] = byte(len(test))",

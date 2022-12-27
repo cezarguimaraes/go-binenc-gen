@@ -16,6 +16,7 @@ type Static struct {
 	Int16  int16
 	Int32  int32
 	Int64  int64
+	Arr    [4]uint8
 }
 
 func main() {
@@ -28,6 +29,7 @@ func main() {
 		Int16:  -2,
 		Int32:  -3,
 		Int64:  -4,
+		Arr:    [4]uint8{1, 2, 3, 4},
 	}
 
 	var buf bytes.Buffer

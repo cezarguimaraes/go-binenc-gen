@@ -144,7 +144,7 @@ func (w *Writer) pushForLvl() {
 	}
 }
 
-func (w *Writer) popForLvl(name string) {
+func (w *Writer) popForLvl(name string, static bool, staticLen int) {
 	// exprs are inserted in reverse order
 	defer func() {
 		w.dynamicSizes = w.dynamicSizes[:w.forLvl]
@@ -158,9 +158,13 @@ func (w *Writer) popForLvl(name string) {
 		// remove closing bracket, not sure if this is sound
 		w.sizeExprs = w.sizeExprs[:len(w.sizeExprs)-1]
 
-		w.dynamicSizes[w.forLvl-1] = append(w.dynamicSizes[w.forLvl-1],
-			fmt.Sprintf("%d * len(%s)", w.sizes[w.forLvl], name),
-		)
+		if !static {
+			w.dynamicSizes[w.forLvl-1] = append(w.dynamicSizes[w.forLvl-1],
+				fmt.Sprintf("%d * len(%s)", w.sizes[w.forLvl], name),
+			)
+		} else {
+			w.sizes[w.forLvl-1] += w.sizes[w.forLvl] * staticLen
+		}
 		return
 	}
 
@@ -187,9 +191,15 @@ func (w *Writer) popForLvl(name string) {
 		),
 	)
 	if w.forLvl > 0 {
-		w.sizeExprs = append(w.sizeExprs,
-			fmt.Sprintf(forStartFmt, rangeForVar(w.forLvl), name),
-		)
+		if !static {
+			w.sizeExprs = append(w.sizeExprs,
+				fmt.Sprintf(forStartFmt, rangeForVar(w.forLvl), name),
+			)
+		} else {
+			w.sizeExprs = append(w.sizeExprs,
+				fmt.Sprintf("\tfor %s := 0; %s < %d; %s++ {\n", indexForVar(w.forLvl), indexForVar(w.forLvl), staticLen, indexForVar(w.forLvl)),
+			)
+		}
 	}
 }
 
@@ -217,7 +227,7 @@ func (w *Writer) writeField(name string, t types.Type) {
 		w.pushForLvl()
 		w.Printf(forStartFmt, rangeForVar(w.forLvl), name)
 		w.writeField(rangeForVar(w.forLvl), slc.Elem())
-		w.popForLvl(name)
+		w.popForLvl(name, false, 0)
 		w.Printf("\t}\n")
 		return
 	}
@@ -228,6 +238,14 @@ func (w *Writer) writeField(name string, t types.Type) {
 			selector := fmt.Sprintf("%s.%s", name, f.Name())
 			w.writeField(selector, f.Type())
 		}
+		return
+	}
+	if arr, ok := t.(*types.Array); ok {
+		w.pushForLvl()
+		w.Printf("\tfor %s := 0; %s < %d; %s++ {\n", indexForVar(w.forLvl), indexForVar(w.forLvl), arr.Len(), indexForVar(w.forLvl))
+		w.writeField(fmt.Sprintf("%s[%s]", name, indexForVar(w.forLvl)), arr.Elem())
+		w.popForLvl(name, true, int(arr.Len()))
+		w.Printf("\t}\n")
 		return
 	}
 	switch f := t.(type) {
@@ -378,7 +396,7 @@ func (w *Writer) ReadField(name string, t types.Type) {
 
 func (w *Writer) SizeExpr() string {
 	if w.forLvl == 0 {
-		w.popForLvl("ignored")
+		w.popForLvl("ignored", false, -1)
 	}
 	res := make([]string, len(w.sizeExprs))
 	for i := 0; i < len(w.sizeExprs); i++ {
