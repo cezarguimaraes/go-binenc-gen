@@ -313,11 +313,14 @@ func (w *Writer) HeaderExpr() string {
 	return strings.Join(lines, "")
 }
 
+func (w *Writer) typeName(t types.Type) string {
+	return types.TypeString(t, types.RelativeTo(w.pkg))
+}
+
 func (w *Writer) ReadField(name string, t types.Type) {
 	t = t.Underlying()
 	if ptr, ok := t.(*types.Pointer); ok {
-		// TODO: allocate destination
-		// like we do for slices
+		w.Printf("\t%s = new(%s)\n", name, w.typeName(ptr.Elem()))
 		w.ReadField("*"+name, ptr.Elem())
 		return
 	}
@@ -326,7 +329,7 @@ func (w *Writer) ReadField(name string, t types.Type) {
 		w.usedSize = true
 		slcLen := "size"
 		w.readNumberN(slcLen, 2, true)
-		w.Printf("\t%s = make(%s, size)\n", name, types.TypeString(slc, types.RelativeTo(w.pkg)))
+		w.Printf("\t%s = make(%s, size)\n", name, w.typeName(slc))
 		// intentionally never decrease forLvl
 		// to never reuse index variables
 		w.Printf("\t%s := int(size)\n", indexForSize(w.forLvl))

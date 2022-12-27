@@ -165,6 +165,7 @@ func TestReadField_Pointers(t *testing.T) {
 		{
 			name: "*byte",
 			want: []string{
+				"test = new(uint8)",
 				"r.Read(buf[:1])",
 				"*test = uint8(buf[0])",
 				"",
@@ -172,8 +173,20 @@ func TestReadField_Pointers(t *testing.T) {
 			t: types.NewPointer(types.Typ[types.Byte]),
 		},
 		{
+			name: "**int8",
+			want: []string{
+				"test = new(*int8)",
+				"*test = new(int8)",
+				"r.Read(buf[:1])",
+				"**test = int8(uint8(buf[0]))",
+				"",
+			},
+			t: types.NewPointer(types.NewPointer(types.Typ[types.Int8])),
+		},
+		{
 			name: "*int8",
 			want: []string{
+				"test = new(int8)",
 				"r.Read(buf[:1])",
 				"*test = int8(uint8(buf[0]))",
 				"",
@@ -183,6 +196,7 @@ func TestReadField_Pointers(t *testing.T) {
 		{
 			name: "*uint8",
 			want: []string{
+				"test = new(uint8)",
 				"r.Read(buf[:1])",
 				"*test = uint8(buf[0])",
 				"",
@@ -192,6 +206,7 @@ func TestReadField_Pointers(t *testing.T) {
 		{
 			name: "*int16",
 			want: []string{
+				"test = new(int16)",
 				"r.Read(buf[:2])",
 				"*test = int16(uint16(buf[0]) | (uint16(buf[1]) << 8))",
 				"",
@@ -201,6 +216,7 @@ func TestReadField_Pointers(t *testing.T) {
 		{
 			name: "*uint16",
 			want: []string{
+				"test = new(uint16)",
 				"r.Read(buf[:2])",
 				"*test = uint16(buf[0]) | (uint16(buf[1]) << 8)",
 				"",
@@ -210,6 +226,7 @@ func TestReadField_Pointers(t *testing.T) {
 		{
 			name: "*uint32",
 			want: []string{
+				"test = new(uint32)",
 				"r.Read(buf[:4])",
 				"*test = uint32(buf[0]) | (uint32(buf[1]) << 8) | (uint32(buf[2]) << 16) | (uint32(buf[3]) << 24)",
 				"",
@@ -219,6 +236,7 @@ func TestReadField_Pointers(t *testing.T) {
 		{
 			name: "*uint64",
 			want: []string{
+				"test = new(uint64)",
 				"r.Read(buf[:8])",
 				"*test = uint64(buf[0]) | (uint64(buf[1]) << 8) | (uint64(buf[2]) << 16) | (uint64(buf[3]) << 24) | (uint64(buf[4]) << 32) | (uint64(buf[5]) << 40) | (uint64(buf[6]) << 48) | (uint64(buf[7]) << 56)",
 				"",
@@ -226,8 +244,9 @@ func TestReadField_Pointers(t *testing.T) {
 			t: types.NewPointer(types.Typ[types.Uint64]),
 		},
 		{
-			name: "*Int32",
+			name: "*int32",
 			want: []string{
+				"test = new(int32)",
 				"r.Read(buf[:4])",
 				"*test = int32(uint32(buf[0]) | (uint32(buf[1]) << 8) | (uint32(buf[2]) << 16) | (uint32(buf[3]) << 24))",
 				"",
@@ -235,8 +254,9 @@ func TestReadField_Pointers(t *testing.T) {
 			t: types.NewPointer(types.Typ[types.Int32]),
 		},
 		{
-			name: "*Int64",
+			name: "*int64",
 			want: []string{
+				"test = new(int64)",
 				"r.Read(buf[:8])",
 				"*test = int64(uint64(buf[0]) | (uint64(buf[1]) << 8) | (uint64(buf[2]) << 16) | (uint64(buf[3]) << 24) | (uint64(buf[4]) << 32) | (uint64(buf[5]) << 40) | (uint64(buf[6]) << 48) | (uint64(buf[7]) << 56))",
 				"",
