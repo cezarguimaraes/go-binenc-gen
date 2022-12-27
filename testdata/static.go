@@ -1,4 +1,10 @@
-package static
+package main
+
+import (
+	"bytes"
+
+	"github.com/google/go-cmp/cmp"
+)
 
 //go:generate go-binenc-gen static.go
 type Static struct {
@@ -10,4 +16,31 @@ type Static struct {
 	Int16  int16
 	Int32  int32
 	Int64  int64
+}
+
+func main() {
+	s := &Static{
+		Uint8:  1,
+		Uint16: 2,
+		Uint32: 3,
+		Uint64: 4,
+		Int8:   -1,
+		Int16:  -2,
+		Int32:  -3,
+		Int64:  -4,
+	}
+
+	var buf bytes.Buffer
+	s.Write(&buf)
+
+	// fmt.Println("% x", buf.Bytes())
+
+	o := new(Static)
+	o.Read(&buf)
+
+	// fmt.Printf("%+v", o)
+
+	if diff := cmp.Diff(s, o); diff != "" {
+		panic("static.go: \n" + diff)
+	}
 }

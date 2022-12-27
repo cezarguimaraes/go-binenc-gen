@@ -74,6 +74,7 @@ type Writer struct {
 	strBufCount int
 	usedSize    bool
 	usedBuffer  bool
+	needUnsafe  bool
 }
 
 func NewWriter() *Writer {
@@ -269,6 +270,7 @@ func (w *Writer) readBoolean(name string) {
 }
 
 func (w *Writer) readString(name string) {
+	w.needUnsafe = true
 	w.usedSize = true
 	w.readNumberN("size", 2, true)
 	w.Printf("\tstrBuf_%d := make([]byte, size)\n", w.strBufCount)
@@ -297,7 +299,7 @@ func (w *Writer) HeaderExpr() string {
 		lines = append(lines, "buf := make([]byte, 8)\n")
 	}
 	if w.usedSize {
-		lines = append(lines, "var size int\n")
+		lines = append(lines, "var size uint16\n")
 	}
 	return strings.Join(lines, "")
 }
@@ -318,7 +320,7 @@ func (w *Writer) ReadField(name string, t types.Type) {
 		w.Printf("\t%s = make(%s, size)\n", name, slc.String())
 		// intentionally never decrease forLvl
 		// to never reuse index variables
-		w.Printf("\t%s := size\n", indexForSize(w.forLvl))
+		w.Printf("\t%s := int(size)\n", indexForSize(w.forLvl))
 		w.Printf("\tfor %s := 0; %s < %s; %s++ {\n", indexForVar(w.forLvl), indexForVar(w.forLvl), indexForSize(w.forLvl), indexForVar(w.forLvl))
 		w.forLvl += 1
 		w.ReadField(fmt.Sprintf("%s[%s]", name, indexForVar(w.forLvl-1)), slc.Elem())
@@ -362,4 +364,8 @@ func (w *Writer) Bytes() []byte {
 
 func (w *Writer) WriteTo(writer io.Writer) (n int64, err error) {
 	return w.buf.WriteTo(writer)
+}
+
+func (w *Writer) NeedUnsafe() bool {
+	return w.needUnsafe
 }
