@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -63,6 +64,7 @@ var (
 	repoData      CondaRepoData
 	repoDataBytes []byte
 	repoDataJSON  bytes.Buffer
+	repoDataGob   bytes.Buffer
 )
 
 func init() {
@@ -96,6 +98,9 @@ func init() {
 	var buf bytes.Buffer
 	repoData.WriteTo(&buf)
 	repoDataBytes = buf.Bytes()
+
+	e := gob.NewEncoder(&repoDataGob)
+	e.Encode(repoData)
 }
 
 func TestCondaRead(t *testing.T) {
@@ -115,6 +120,27 @@ func BenchmarkCondaBinencRead(b *testing.B) {
 	}
 }
 
+func BenchmarkCondaJSONRead(b *testing.B) {
+	b.ResetTimer()
+	b.SetBytes(int64(repoDataJSON.Len()))
+	for i := 0; i < b.N; i++ {
+		var rd CondaRepoData
+		e := json.NewDecoder(bytes.NewReader(repoDataJSON.Bytes()))
+		e.Decode(&rd)
+		b.SetBytes(int64(repoDataJSON.Len()))
+	}
+}
+
+func BenchmarkCondaGobRead(b *testing.B) {
+	b.ResetTimer()
+	b.SetBytes(int64(repoDataGob.Len()))
+	for i := 0; i < b.N; i++ {
+		var rd CondaRepoData
+		d := gob.NewDecoder(bytes.NewReader(repoDataGob.Bytes()))
+		d.Decode(&rd)
+	}
+}
+
 func BenchmarkCondaBinencWrite(b *testing.B) {
 	var buf bytes.Buffer
 	b.ResetTimer()
@@ -126,17 +152,6 @@ func BenchmarkCondaBinencWrite(b *testing.B) {
 		buf.Reset()
 	}
 	b.Logf("binenc write size: %d\n", size)
-}
-
-func BenchmarkCondaJSONRead(b *testing.B) {
-	b.ResetTimer()
-	b.SetBytes(int64(repoDataJSON.Len()))
-	for i := 0; i < b.N; i++ {
-		var rd CondaRepoData
-		e := json.NewDecoder(bytes.NewReader(repoDataJSON.Bytes()))
-		e.Decode(&rd)
-		b.SetBytes(int64(repoDataJSON.Len()))
-	}
 }
 
 func BenchmarkCondaJSONWrite(b *testing.B) {
@@ -153,6 +168,33 @@ func BenchmarkCondaJSONWrite(b *testing.B) {
 	b.Logf("json write size: %d\n", size)
 }
 
+func BenchmarkCondaGobWrite(b *testing.B) {
+	var buf bytes.Buffer
+	b.ResetTimer()
+	size := 0
+	for i := 0; i < b.N; i++ {
+		e := gob.NewEncoder(&buf)
+		e.Encode(repoData)
+		size = buf.Len()
+		b.SetBytes(int64(size))
+		buf.Reset()
+	}
+	b.Logf("gob write size: %d\n", size)
+}
+
+func BenchmarkCondaGobWriteLenient(b *testing.B) {
+	var buf bytes.Buffer
+	b.ResetTimer()
+	size := 0
+	e := gob.NewEncoder(&buf)
+	for i := 0; i < b.N; i++ {
+		e.Encode(repoData)
+		size = buf.Len()
+		b.SetBytes(int64(size))
+		buf.Reset()
+	}
+	b.Logf("gob write size: %d\n", size)
+}
 func (s *CondaRepoData) WriteTo(w io.Writer) (n int, err error) {
 	size := 12
 	size += len(s.Info.Subdir)
