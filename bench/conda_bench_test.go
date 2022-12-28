@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 type (
@@ -53,18 +55,23 @@ type CondaRepoDataJSON struct {
 
 // Convert maps to arrays since it isn't supported yet
 type CondaRepoData struct {
-	Info            Info
-	Packages        []Package
-	PackagesConda   []PackageConda
-	Removed         []string
-	RepoDataVersion uint32
+	Info            Info           `json:"info"`
+	Packages        []Package      `json:"packages"`
+	PackagesConda   []PackageConda `json:"packages.conda"`
+	Removed         []string       `json:"removed"`
+	RepoDataVersion uint32         `json:"repodata_version"`
 }
 
 var (
-	repoData      CondaRepoData
-	repoDataBytes []byte
-	repoDataJSON  bytes.Buffer
-	repoDataGob   bytes.Buffer
+	repoData   CondaRepoData
+	repoDataPb PBCondaRepoData
+
+	repoDataBytes   []byte
+	repoDataPbBytes []byte
+
+	// json serialized but using arrays instead of maps
+	repoDataJSON bytes.Buffer
+	repoDataGob  bytes.Buffer
 )
 
 func init() {
@@ -76,8 +83,7 @@ func init() {
 	if resp.StatusCode != 200 {
 		panic(fmt.Sprintf("failed bench data download with status code %d", resp.StatusCode))
 	}
-	t := io.TeeReader(resp.Body, &repoDataJSON)
-	d := json.NewDecoder(t)
+	d := json.NewDecoder(resp.Body)
 	var rd CondaRepoDataJSON
 	err = d.Decode(&rd)
 	if err != nil {
@@ -101,12 +107,32 @@ func init() {
 
 	e := gob.NewEncoder(&repoDataGob)
 	e.Encode(repoData)
+
+	je := json.NewEncoder(&repoDataJSON)
+	je.Encode(repoData)
+
+	err = protojson.Unmarshal(repoDataJSON.Bytes(), &repoDataPb)
+	if err != nil {
+		panic(fmt.Sprintf("failed jsonpb unmarshal: %s", err))
+	}
+
+	repoDataPbBytes, err = proto.Marshal(&repoDataPb)
+	if err != nil {
+		panic(fmt.Sprintf("failed protobuf marshal: %s", err))
+	}
 }
 
 func TestCondaRead(t *testing.T) {
 	var rd CondaRepoData
 	rd.ReadFrom(bytes.NewReader(repoDataBytes))
 	if diff := cmp.Diff(repoData, rd, cmpopts.EquateEmpty()); diff != "" {
+		t.Error(diff)
+	}
+
+	var rdGob CondaRepoData
+	d := gob.NewDecoder(bytes.NewReader(repoDataGob.Bytes()))
+	d.Decode(&rdGob)
+	if diff := cmp.Diff(rdGob, rd, cmpopts.EquateEmpty()); diff != "" {
 		t.Error(diff)
 	}
 }
@@ -138,6 +164,18 @@ func BenchmarkCondaGobRead(b *testing.B) {
 		var rd CondaRepoData
 		d := gob.NewDecoder(bytes.NewReader(repoDataGob.Bytes()))
 		d.Decode(&rd)
+	}
+}
+
+func BenchmarkCondaProtobufRead(b *testing.B) {
+	b.ResetTimer()
+	b.SetBytes(int64(len(repoDataPbBytes)))
+	for i := 0; i < b.N; i++ {
+		var rd PBCondaRepoData
+		proto.Unmarshal(repoDataPbBytes, &rd)
+		//if err != nil {
+		//	b.Error(err)
+		//}
 	}
 }
 
@@ -195,6 +233,22 @@ func BenchmarkCondaGobWriteLenient(b *testing.B) {
 	}
 	b.Logf("gob write size: %d\n", size)
 }
+
+func BenchmarkCondaProtobuWrite(b *testing.B) {
+	b.ResetTimer()
+	size := 0
+	for i := 0; i < b.N; i++ {
+		out, _ := proto.Marshal(&repoDataPb)
+		//if err != nil {
+		//	b.Error(err)
+		//}
+
+		size = int(len(out))
+		b.SetBytes(int64(size))
+	}
+	b.Logf("protobuf write size: %d\n", size)
+}
+
 func (s *CondaRepoData) WriteTo(w io.Writer) (n int, err error) {
 	size := 12
 	size += len(s.Info.Subdir)

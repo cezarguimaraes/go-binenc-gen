@@ -317,12 +317,16 @@ func (w *Writer) readString(name string) {
 	w.Printf("\tif c < 2*cap(strBuf) {\n")
 	w.Printf("\tc = 2*cap(strBuf)\n")
 	w.Printf("\t}\n")
+	// based on bytes.Buffer.growSlice:
+	// https://cs.opensource.google/go/go/+/refs/tags/go1.19.4:src/bytes/buffer.go;l=240
 	w.Printf("\tstrBuf = append([]byte(nil), make([]byte, c)...)\n")
 	// do we need to copy previous bytes here??
 	w.Printf("\tm = 0\n")
 	w.Printf("\t}\n")
 	w.Printf("\tr.Read(strBuf[m:m+int(size)])\n")
 	w.Printf("\ttmp = strBuf[m:m+int(size)]\n")
+	// based on strings.Builder.Strings
+	// https://cs.opensource.google/go/go/+/refs/tags/go1.19.4:src/strings/builder.go;l=48
 	w.Printf("\t%s = *(*string)(unsafe.Pointer(&tmp))\n", name)
 	w.Printf("\tm += int(size)\n")
 	w.strBufCount += 1

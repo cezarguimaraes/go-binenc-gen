@@ -1,0 +1,47 @@
+syntax = "proto3";
+package main_test;
+
+option go_package = "github.com/cezarguimaraes/go-binenc-gen/main_test";
+
+message PBCondaRepoData {
+	message Info {
+		string subdir = 1;
+	}
+
+	message Package {
+		string build = 1;
+		uint32 build_number = 2;
+		repeated string depends = 3;
+		string license = 4;
+		string md5 = 5;
+		string name = 6;
+		string sha256 = 7;
+		uint32 size = 8;
+		string subdir = 9;
+		uint64 timestamp = 10;
+		string version = 11;
+	}
+
+	message PackageConda {
+		string build = 1;
+		uint32 build_number = 2;
+		repeated string depends = 3;
+		string license = 4;
+		string md5 = 5;
+		string name = 6;
+		string sha256 = 7;
+		uint32 size = 8;
+		string subdir = 9;
+		uint64 timestamp = 10;
+		string version = 11;
+		repeated string constrains = 12;
+		string legacy_bz2_md5 = 13;
+		string license_family = 14;
+	}
+
+	Info info = 1;
+	repeated Package packages = 2;
+	repeated PackageConda packages_conda = 3 [json_name = "packages.conda"];
+	repeated string removed = 4;
+	uint32 repodata_version = 5;
+}
