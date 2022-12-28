@@ -312,9 +312,19 @@ func (w *Writer) readString(name string) {
 	w.needUnsafe = true
 	w.usedSize = true
 	w.readNumberN("size", 2, true)
-	w.Printf("\tstrBuf_%d := make([]byte, size)\n", w.strBufCount)
-	w.Printf("\tr.Read(strBuf_%d)\n", w.strBufCount)
-	w.Printf("\t%s = *(*string)(unsafe.Pointer(&strBuf_%d))\n", name, w.strBufCount)
+	w.Printf("\tif c - m < int(size) {\n")
+	w.Printf("\tc = int(size)\n")
+	w.Printf("\tif c < 2*cap(strBuf) {\n")
+	w.Printf("\tc = 2*cap(strBuf)\n")
+	w.Printf("\t}\n")
+	w.Printf("\tstrBuf = append([]byte(nil), make([]byte, c)...)\n")
+	// do we need to copy previous bytes here??
+	w.Printf("\tm = 0\n")
+	w.Printf("\t}\n")
+	w.Printf("\tr.Read(strBuf[m:m+int(size)])\n")
+	w.Printf("\ttmp = strBuf[m:m+int(size)]\n")
+	w.Printf("\t%s = *(*string)(unsafe.Pointer(&tmp))\n", name)
+	w.Printf("\tm += int(size)\n")
 	w.strBufCount += 1
 }
 
@@ -340,6 +350,9 @@ func (w *Writer) HeaderExpr() string {
 	}
 	if w.usedSize {
 		lines = append(lines, "var size uint16\n")
+	}
+	if w.strBufCount > 0 {
+		lines = append(lines, "var tmp []byte\n", "m := 0\n", "c := 64\n", "strBuf := make([]byte, c)\n")
 	}
 	return strings.Join(lines, "")
 }

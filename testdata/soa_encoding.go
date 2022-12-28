@@ -44,11 +44,24 @@ func (s *Inner) WriteTo(w io.Writer) (n int, err error) {
 func (s *Inner) ReadFrom(r io.Reader) error {
 	buf := make([]byte, 8)
 	var size uint16
+	var tmp []byte
+	m := 0
+	c := 64
+	strBuf := make([]byte, c)
 	r.Read(buf[:2])
 	size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-	strBuf_0 := make([]byte, size)
-	r.Read(strBuf_0)
-	s.Str = *(*string)(unsafe.Pointer(&strBuf_0))
+	if c-m < int(size) {
+		c = int(size)
+		if c < 2*cap(strBuf) {
+			c = 2 * cap(strBuf)
+		}
+		strBuf = append([]byte(nil), make([]byte, c)...)
+		m = 0
+	}
+	r.Read(strBuf[m : m+int(size)])
+	tmp = strBuf[m : m+int(size)]
+	s.Str = *(*string)(unsafe.Pointer(&tmp))
+	m += int(size)
 	r.Read(buf[:2])
 	size = uint16(buf[0]) | (uint16(buf[1]) << 8)
 	s.Arr3 = make([]uint8, size)
@@ -64,9 +77,18 @@ func (s *Inner) ReadFrom(r io.Reader) error {
 	for i1 := 0; i1 < si1; i1++ {
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_1 := make([]byte, size)
-		r.Read(strBuf_1)
-		s.Arr4[i1] = *(*string)(unsafe.Pointer(&strBuf_1))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Arr4[i1] = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 	}
 	return nil
 }
@@ -131,6 +153,10 @@ func (s *Outer) WriteTo(w io.Writer) (n int, err error) {
 func (s *Outer) ReadFrom(r io.Reader) error {
 	buf := make([]byte, 8)
 	var size uint16
+	var tmp []byte
+	m := 0
+	c := 64
+	strBuf := make([]byte, c)
 	r.Read(buf[:2])
 	size = uint16(buf[0]) | (uint16(buf[1]) << 8)
 	s.Arr1 = make([]uint8, size)
@@ -146,9 +172,18 @@ func (s *Outer) ReadFrom(r io.Reader) error {
 	for i1 := 0; i1 < si1; i1++ {
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_0 := make([]byte, size)
-		r.Read(strBuf_0)
-		s.Inners[i1].Str = *(*string)(unsafe.Pointer(&strBuf_0))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Inners[i1].Str = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
 		s.Inners[i1].Arr3 = make([]uint8, size)
@@ -164,9 +199,18 @@ func (s *Outer) ReadFrom(r io.Reader) error {
 		for i3 := 0; i3 < si3; i3++ {
 			r.Read(buf[:2])
 			size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-			strBuf_1 := make([]byte, size)
-			r.Read(strBuf_1)
-			s.Inners[i1].Arr4[i3] = *(*string)(unsafe.Pointer(&strBuf_1))
+			if c-m < int(size) {
+				c = int(size)
+				if c < 2*cap(strBuf) {
+					c = 2 * cap(strBuf)
+				}
+				strBuf = append([]byte(nil), make([]byte, c)...)
+				m = 0
+			}
+			r.Read(strBuf[m : m+int(size)])
+			tmp = strBuf[m : m+int(size)]
+			s.Inners[i1].Arr4[i3] = *(*string)(unsafe.Pointer(&tmp))
+			m += int(size)
 		}
 	}
 	r.Read(buf[:2])

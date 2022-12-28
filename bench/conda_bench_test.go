@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"testing"
 	"unsafe"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 type (
@@ -93,6 +96,14 @@ func init() {
 	var buf bytes.Buffer
 	repoData.WriteTo(&buf)
 	repoDataBytes = buf.Bytes()
+}
+
+func TestCondaRead(t *testing.T) {
+	var rd CondaRepoData
+	rd.ReadFrom(bytes.NewReader(repoDataBytes))
+	if diff := cmp.Diff(repoData, rd, cmpopts.EquateEmpty()); diff != "" {
+		t.Error(diff)
+	}
 }
 
 func BenchmarkCondaBinencRead(b *testing.B) {
@@ -355,11 +366,24 @@ func (s *CondaRepoData) WriteTo(w io.Writer) (n int, err error) {
 func (s *CondaRepoData) ReadFrom(r io.Reader) error {
 	buf := make([]byte, 8)
 	var size uint16
+	var tmp []byte
+	m := 0
+	c := 64
+	strBuf := make([]byte, c)
 	r.Read(buf[:2])
 	size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-	strBuf_0 := make([]byte, size)
-	r.Read(strBuf_0)
-	s.Info.Subdir = *(*string)(unsafe.Pointer(&strBuf_0))
+	if c-m < int(size) {
+		c = int(size)
+		if c < 2*cap(strBuf) {
+			c = 2 * cap(strBuf)
+		}
+		strBuf = append([]byte(nil), make([]byte, c)...)
+		m = 0
+	}
+	r.Read(strBuf[m : m+int(size)])
+	tmp = strBuf[m : m+int(size)]
+	s.Info.Subdir = *(*string)(unsafe.Pointer(&tmp))
+	m += int(size)
 	r.Read(buf[:2])
 	size = uint16(buf[0]) | (uint16(buf[1]) << 8)
 	s.Packages = make([]Package, size)
@@ -367,9 +391,18 @@ func (s *CondaRepoData) ReadFrom(r io.Reader) error {
 	for i := 0; i < si; i++ {
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_1 := make([]byte, size)
-		r.Read(strBuf_1)
-		s.Packages[i].Build = *(*string)(unsafe.Pointer(&strBuf_1))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Packages[i].Build = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:4])
 		s.Packages[i].BuildNumber = uint32(buf[0]) | (uint32(buf[1]) << 8) | (uint32(buf[2]) << 16) | (uint32(buf[3]) << 24)
 		r.Read(buf[:2])
@@ -379,44 +412,107 @@ func (s *CondaRepoData) ReadFrom(r io.Reader) error {
 		for i1 := 0; i1 < si1; i1++ {
 			r.Read(buf[:2])
 			size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-			strBuf_2 := make([]byte, size)
-			r.Read(strBuf_2)
-			s.Packages[i].Depends[i1] = *(*string)(unsafe.Pointer(&strBuf_2))
+			if c-m < int(size) {
+				c = int(size)
+				if c < 2*cap(strBuf) {
+					c = 2 * cap(strBuf)
+				}
+				strBuf = append([]byte(nil), make([]byte, c)...)
+				m = 0
+			}
+			r.Read(strBuf[m : m+int(size)])
+			tmp = strBuf[m : m+int(size)]
+			s.Packages[i].Depends[i1] = *(*string)(unsafe.Pointer(&tmp))
+			m += int(size)
 		}
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_3 := make([]byte, size)
-		r.Read(strBuf_3)
-		s.Packages[i].License = *(*string)(unsafe.Pointer(&strBuf_3))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Packages[i].License = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_4 := make([]byte, size)
-		r.Read(strBuf_4)
-		s.Packages[i].MD5 = *(*string)(unsafe.Pointer(&strBuf_4))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Packages[i].MD5 = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_5 := make([]byte, size)
-		r.Read(strBuf_5)
-		s.Packages[i].Name = *(*string)(unsafe.Pointer(&strBuf_5))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Packages[i].Name = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_6 := make([]byte, size)
-		r.Read(strBuf_6)
-		s.Packages[i].Sha256 = *(*string)(unsafe.Pointer(&strBuf_6))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Packages[i].Sha256 = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:4])
 		s.Packages[i].Size = uint32(buf[0]) | (uint32(buf[1]) << 8) | (uint32(buf[2]) << 16) | (uint32(buf[3]) << 24)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_7 := make([]byte, size)
-		r.Read(strBuf_7)
-		s.Packages[i].Subdir = *(*string)(unsafe.Pointer(&strBuf_7))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Packages[i].Subdir = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:8])
 		s.Packages[i].Timestamp = uint64(buf[0]) | (uint64(buf[1]) << 8) | (uint64(buf[2]) << 16) | (uint64(buf[3]) << 24) | (uint64(buf[4]) << 32) | (uint64(buf[5]) << 40) | (uint64(buf[6]) << 48) | (uint64(buf[7]) << 56)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_8 := make([]byte, size)
-		r.Read(strBuf_8)
-		s.Packages[i].Version = *(*string)(unsafe.Pointer(&strBuf_8))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Packages[i].Version = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 	}
 	r.Read(buf[:2])
 	size = uint16(buf[0]) | (uint16(buf[1]) << 8)
@@ -425,9 +521,18 @@ func (s *CondaRepoData) ReadFrom(r io.Reader) error {
 	for i2 := 0; i2 < si2; i2++ {
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_9 := make([]byte, size)
-		r.Read(strBuf_9)
-		s.PackagesConda[i2].Package.Build = *(*string)(unsafe.Pointer(&strBuf_9))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.PackagesConda[i2].Package.Build = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:4])
 		s.PackagesConda[i2].Package.BuildNumber = uint32(buf[0]) | (uint32(buf[1]) << 8) | (uint32(buf[2]) << 16) | (uint32(buf[3]) << 24)
 		r.Read(buf[:2])
@@ -437,44 +542,107 @@ func (s *CondaRepoData) ReadFrom(r io.Reader) error {
 		for i3 := 0; i3 < si3; i3++ {
 			r.Read(buf[:2])
 			size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-			strBuf_10 := make([]byte, size)
-			r.Read(strBuf_10)
-			s.PackagesConda[i2].Package.Depends[i3] = *(*string)(unsafe.Pointer(&strBuf_10))
+			if c-m < int(size) {
+				c = int(size)
+				if c < 2*cap(strBuf) {
+					c = 2 * cap(strBuf)
+				}
+				strBuf = append([]byte(nil), make([]byte, c)...)
+				m = 0
+			}
+			r.Read(strBuf[m : m+int(size)])
+			tmp = strBuf[m : m+int(size)]
+			s.PackagesConda[i2].Package.Depends[i3] = *(*string)(unsafe.Pointer(&tmp))
+			m += int(size)
 		}
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_11 := make([]byte, size)
-		r.Read(strBuf_11)
-		s.PackagesConda[i2].Package.License = *(*string)(unsafe.Pointer(&strBuf_11))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.PackagesConda[i2].Package.License = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_12 := make([]byte, size)
-		r.Read(strBuf_12)
-		s.PackagesConda[i2].Package.MD5 = *(*string)(unsafe.Pointer(&strBuf_12))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.PackagesConda[i2].Package.MD5 = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_13 := make([]byte, size)
-		r.Read(strBuf_13)
-		s.PackagesConda[i2].Package.Name = *(*string)(unsafe.Pointer(&strBuf_13))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.PackagesConda[i2].Package.Name = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_14 := make([]byte, size)
-		r.Read(strBuf_14)
-		s.PackagesConda[i2].Package.Sha256 = *(*string)(unsafe.Pointer(&strBuf_14))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.PackagesConda[i2].Package.Sha256 = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:4])
 		s.PackagesConda[i2].Package.Size = uint32(buf[0]) | (uint32(buf[1]) << 8) | (uint32(buf[2]) << 16) | (uint32(buf[3]) << 24)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_15 := make([]byte, size)
-		r.Read(strBuf_15)
-		s.PackagesConda[i2].Package.Subdir = *(*string)(unsafe.Pointer(&strBuf_15))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.PackagesConda[i2].Package.Subdir = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:8])
 		s.PackagesConda[i2].Package.Timestamp = uint64(buf[0]) | (uint64(buf[1]) << 8) | (uint64(buf[2]) << 16) | (uint64(buf[3]) << 24) | (uint64(buf[4]) << 32) | (uint64(buf[5]) << 40) | (uint64(buf[6]) << 48) | (uint64(buf[7]) << 56)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_16 := make([]byte, size)
-		r.Read(strBuf_16)
-		s.PackagesConda[i2].Package.Version = *(*string)(unsafe.Pointer(&strBuf_16))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.PackagesConda[i2].Package.Version = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
 		s.PackagesConda[i2].Constrains = make([]string, size)
@@ -482,20 +650,47 @@ func (s *CondaRepoData) ReadFrom(r io.Reader) error {
 		for i4 := 0; i4 < si4; i4++ {
 			r.Read(buf[:2])
 			size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-			strBuf_17 := make([]byte, size)
-			r.Read(strBuf_17)
-			s.PackagesConda[i2].Constrains[i4] = *(*string)(unsafe.Pointer(&strBuf_17))
+			if c-m < int(size) {
+				c = int(size)
+				if c < 2*cap(strBuf) {
+					c = 2 * cap(strBuf)
+				}
+				strBuf = append([]byte(nil), make([]byte, c)...)
+				m = 0
+			}
+			r.Read(strBuf[m : m+int(size)])
+			tmp = strBuf[m : m+int(size)]
+			s.PackagesConda[i2].Constrains[i4] = *(*string)(unsafe.Pointer(&tmp))
+			m += int(size)
 		}
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_18 := make([]byte, size)
-		r.Read(strBuf_18)
-		s.PackagesConda[i2].LegacyBz2Md5 = *(*string)(unsafe.Pointer(&strBuf_18))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.PackagesConda[i2].LegacyBz2Md5 = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_19 := make([]byte, size)
-		r.Read(strBuf_19)
-		s.PackagesConda[i2].LicenseFamily = *(*string)(unsafe.Pointer(&strBuf_19))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.PackagesConda[i2].LicenseFamily = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 	}
 	r.Read(buf[:2])
 	size = uint16(buf[0]) | (uint16(buf[1]) << 8)
@@ -504,9 +699,18 @@ func (s *CondaRepoData) ReadFrom(r io.Reader) error {
 	for i5 := 0; i5 < si5; i5++ {
 		r.Read(buf[:2])
 		size = uint16(buf[0]) | (uint16(buf[1]) << 8)
-		strBuf_20 := make([]byte, size)
-		r.Read(strBuf_20)
-		s.Removed[i5] = *(*string)(unsafe.Pointer(&strBuf_20))
+		if c-m < int(size) {
+			c = int(size)
+			if c < 2*cap(strBuf) {
+				c = 2 * cap(strBuf)
+			}
+			strBuf = append([]byte(nil), make([]byte, c)...)
+			m = 0
+		}
+		r.Read(strBuf[m : m+int(size)])
+		tmp = strBuf[m : m+int(size)]
+		s.Removed[i5] = *(*string)(unsafe.Pointer(&tmp))
+		m += int(size)
 	}
 	r.Read(buf[:4])
 	s.RepoDataVersion = uint32(buf[0]) | (uint32(buf[1]) << 8) | (uint32(buf[2]) << 16) | (uint32(buf[3]) << 24)
