@@ -1,5 +1,8 @@
 # go-binenc-gen
 
+## Overview
+
+GoDoc @ https://pkg.go.dev/github.com/cezarguimaraes/go-binenc-gen
 
 ## TODOs
 
